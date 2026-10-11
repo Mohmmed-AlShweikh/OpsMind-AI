@@ -1,0 +1,234 @@
+{
+  "name": "WF-07 Daily AI Report",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 9,
+              "triggerAtMinute": 30
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        4160,
+        1040
+      ],
+      "id": "2f69a3d0-fed9-4f4e-ae7a-48bff22fa5a4",
+      "name": "Daily Report Schedule"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "CX9kGhAvsYIAZi9h",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/CX9kGhAvsYIAZi9h",
+          "cachedResultName": "WF-06 Business Reports"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "intent": "report",
+            "action": "view",
+            "request": "Generate today’s report.",
+            "role": "Manager",
+            "user_id": "U001",
+            "user_name": "Mohammed",
+            "status": "Active",
+            "chat_id": "YOUR_MANAGER_CHAT_ID"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        4416,
+        1040
+      ],
+      "id": "0ea38bcf-b4c1-4777-b1f2-2ef2fd4b9b6a",
+      "name": "Call WF-06 Business Reports"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.reply }}",
+        "options": {
+          "systemMessage": "Summarize the supplied business report in concise Arabic. Never invent numbers. Return only the summary text."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.8,
+      "position": [
+        4704,
+        1040
+      ],
+      "id": "bb00808f-e99b-45ba-8e4a-8cfb7aa5b23a",
+      "name": "AI Daily Summary"
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_MANAGER_CHAT_ID",
+        "text": "={{ '📊 التقرير اليومي\\n\\n'+($json.output||$json.text||$json.reply||'') }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        5104,
+        1040
+      ],
+      "id": "16457861-cb9e-47fd-9160-100a618c77af",
+      "name": "Send Daily Report",
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Telegram account 18"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "3lWlOHWA5Eg21KAV",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/3lWlOHWA5Eg21KAV",
+          "cachedResultName": "WF-08 Audit Logging"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "user_id": "U001",
+            "user_name": "Mohammed",
+            "role": "Manager",
+            "action": "daily_report",
+            "status": "success",
+            "intent": "report",
+            "entity_type": "Report",
+            "entity_id": "Daily",
+            "details": "={{ $json.reply || \"\" }}",
+            "reply": "={{ $json.reply || \"\" }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        5344,
+        1040
+      ],
+      "id": "c0d6d3db-614c-40a4-b552-971d79450b16",
+      "name": "Call WF-08 Audit Logging"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.5-flash-lite",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        4576,
+        1248
+      ],
+      "id": "92165537-df3b-4e2c-bfe7-01705015f07e",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Gemini(PaLM) Api account 8"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Daily Report Schedule": {
+      "main": [
+        [
+          {
+            "node": "Call WF-06 Business Reports",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call WF-06 Business Reports": {
+      "main": [
+        [
+          {
+            "node": "AI Daily Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Daily Summary": {
+      "main": [
+        [
+          {
+            "node": "Send Daily Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Daily Report": {
+      "main": [
+        [
+          {
+            "node": "Call WF-08 Audit Logging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Daily Summary",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "timezone": "Asia/Hebron",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "errorWorkflow": "4gRXNAKnlMatvg6L"
+  },
+  "versionId": "3de1a6ae-b5ab-48fd-8b9a-ba7d39a80fb3",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "nodeGroups": [],
+  "id": "DXd1SbyyNfDFf093",
+  "tags": []
+}

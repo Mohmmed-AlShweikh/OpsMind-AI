@@ -1,0 +1,292 @@
+{
+  "name": "WF-06 Business Reports",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        2064,
+        1568
+      ],
+      "id": "28ea6559-bc5d-4186-b40c-32305f821ca0",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1558027212,
+          "mode": "list",
+          "cachedResultName": "Invoices"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2352,
+        1296
+      ],
+      "id": "88da4aa7-1297-405b-a9f8-aa86c5e781a0",
+      "name": "Get Invoices",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 411613722,
+          "mode": "list",
+          "cachedResultName": "Orders"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2352,
+        1552
+      ],
+      "id": "3ae033ef-3ce7-490b-ab2a-0d0a00a2b6e4",
+      "name": "Get Orders",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1635465681,
+          "mode": "list",
+          "cachedResultName": "Customers"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2352,
+        1776
+      ],
+      "id": "b688f35c-09ec-4f50-9110-e723070942aa",
+      "name": "Get Customers",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2592,
+        1408
+      ],
+      "id": "6085ddb9-ce7b-4385-a04c-24c7f5d769e9",
+      "name": "Merge Invoices + Orders"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2592,
+        1632
+      ],
+      "id": "0bd6e467-1b82-4a6b-9791-e799beeec69d",
+      "name": "Merge All Report Data"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $('When Executed by Another Workflow').first().json;\nconst inv = $('Get Invoices').all().map(x=>x.json);\nconst ord = $('Get Orders').all().map(x=>x.json);\nconst cus = $('Get Customers').all().map(x=>x.json);\nconst total = inv.reduce((s,r)=>s + Number(r.amount || 0), 0);\nconst pendingInvoices = inv.filter(r => String(r.status || '').toLowerCase().includes('pending')).length;\nconst pendingOrders = ord.filter(r => String(r.status || '').toLowerCase().includes('pending')).length;\nreturn [{json:{...input,reply:`📊 تقرير الأعمال\\nالفواتير: ${inv.length}\\nإجمالي مبالغ الفواتير: ${total}\\nالفواتير المعلقة: ${pendingInvoices}\\nالطلبات: ${ord.length}\\nالطلبات المعلقة: ${pendingOrders}\\nالعملاء: ${cus.length}`,result_type:'Business Report',audit_action:'view',audit_status:'success',intent:'report'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2832,
+        1568
+      ],
+      "id": "3936977e-0f4b-4248-bd2d-7ac83bb86bf2",
+      "name": "Build Business Report"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "3lWlOHWA5Eg21KAV",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/3lWlOHWA5Eg21KAV",
+          "cachedResultName": "WF-08 Audit Logging"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "user_id": "={{ $json.user_id || \"system\" }}",
+            "user_name": "={{ $json.user_name || \"\" }}",
+            "role": "={{ $json.role || \"\" }}",
+            "action": "view",
+            "status": "success",
+            "intent": "report",
+            "entity_type": "Report",
+            "entity_id": "Business Report",
+            "details": "={{ $json.reply || \"\" }}",
+            "reply": "={{ $json.reply || \"\" }}",
+            "result_type": "={{ $json.result_type || \"Business Report\" }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        3120,
+        1568
+      ],
+      "id": "cf368e16-9f15-4606-a77e-19837114212a",
+      "name": "Call WF-08 Audit Logging"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Get Invoices",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Orders",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Customers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Invoices": {
+      "main": [
+        [
+          {
+            "node": "Merge Invoices + Orders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Orders": {
+      "main": [
+        [
+          {
+            "node": "Merge Invoices + Orders",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Get Customers": {
+      "main": [
+        [
+          {
+            "node": "Merge All Report Data",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Invoices + Orders": {
+      "main": [
+        [
+          {
+            "node": "Merge All Report Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge All Report Data": {
+      "main": [
+        [
+          {
+            "node": "Build Business Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Business Report": {
+      "main": [
+        [
+          {
+            "node": "Call WF-08 Audit Logging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "4gRXNAKnlMatvg6L",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "9ab53be1-c18d-42d8-a037-d2feb7ca98f3",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "nodeGroups": [],
+  "id": "CX9kGhAvsYIAZi9h",
+  "tags": []
+}

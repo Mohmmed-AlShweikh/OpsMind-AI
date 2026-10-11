@@ -1,0 +1,1124 @@
+{
+  "name": "WF-05 Support Tickets",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        4784,
+        3472
+      ],
+      "id": "6b764358-b091-4ea4-8c0b-f7f295a41e9c",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst input = $json || {};\n\n// ---------- Helpers ----------\nconst clean = (value) => {\n  if (value === undefined || value === null) return undefined;\n  const result = String(value).trim();\n  return result || undefined;\n};\n\nconst normalizeId = (value) => {\n  const result = clean(value);\n  return result ? result.toUpperCase() : undefined;\n};\n\n// ---------- Read request and AI data ----------\nlet request = input.request ?? '';\nlet parsedRequest = {};\n\nif (typeof request === 'object' && request !== null) {\n  parsedRequest = request;\n  request = '';\n} else {\n  request = String(request);\n\n  try {\n    const parsed = JSON.parse(request);\n    if (parsed && typeof parsed === 'object') {\n      parsedRequest = parsed;\n    }\n  } catch {}\n}\n\nlet aiData = input.data ?? {};\n\nif (typeof aiData === 'string') {\n  try {\n    aiData = JSON.parse(aiData);\n  } catch {\n    aiData = {};\n  }\n}\n\nif (!aiData || typeof aiData !== 'object' || Array.isArray(aiData)) {\n  aiData = {};\n}\n\nconst source = {\n  ...input,\n  ...parsedRequest,\n  ...aiData,\n};\n\nconst text = String(request).trim();\n\nconst get = (...keys) => {\n  for (const key of keys) {\n    const value = source[key];\n    if (value !== undefined && value !== null &&\n        String(value).trim() !== '') {\n      return value;\n    }\n  }\n  return undefined;\n};\n\n// ---------- Extract labeled fields ----------\nfunction labeledValue(labels) {\n  const label = labels.join('|');\n\n  const re = new RegExp(\n    '(?:^|\\\\n|[,;|])\\\\s*(?:' + label +\n    ')\\\\s*[:=：-]\\\\s*([^\\\\n,;|]+)',\n    'i'\n  );\n\n  return text.match(re)?.[1]?.trim();\n}\n\n// ---------- Determine action ----------\nlet action = String(source.action || '').trim().toLowerCase();\n\nconst actionAliases = {\n  'عرض': 'view',\n  'اعرض': 'view',\n  'ورجيني': 'view',\n  'شوف': 'view',\n  'إضافة': 'add',\n  'اضافة': 'add',\n  'أضف': 'add',\n  'اضف': 'add',\n  'ضيف': 'add',\n  'أنشئ': 'add',\n  'انشئ': 'add',\n  'افتح': 'add',\n  'تعديل': 'update',\n  'عدل': 'update',\n  'عدّل': 'update',\n  'حدث': 'update',\n  'حدّث': 'update',\n  'غيّر': 'update',\n  'غير': 'update',\n  'زبط': 'update',\n  'ظبط': 'update',\n  'حذف': 'delete',\n  'احذف': 'delete',\n  'امسح': 'delete',\n  'شيل': 'delete',\n};\n\nif (actionAliases[action]) {\n  action = actionAliases[action];\n}\n\nif (!['view', 'add', 'update', 'delete'].includes(action)) {\n  if (/\\b(add|create|open)\\b|إضافة|اضافة|أضف|اضف|ضيف|أنشئ|انشئ|افتح|إنشاء|انشاء/i.test(text)) {\n    action = 'add';\n  } else if (/\\b(update|edit|change|modify)\\b|تعديل|عدّل|عدل|حدّث|حدث|غيّر|غير|زبط|ظبط/i.test(text)) {\n    action = 'update';\n  } else if (/\\b(delete|remove)\\b|احذف|حذف|امسح|مسح|شيل/i.test(text)) {\n    action = 'delete';\n  } else {\n    action = 'view';\n  }\n}\n\n// ---------- Extract ticket and customer IDs ----------\nlet ticket_id = get(\n  'ticket_id', 'ticketId', 'ticketID'\n);\n\nlet customer_id = get(\n  'customer_id', 'customerId', 'customerID'\n);\n\nticket_id = ticket_id || labeledValue([\n  'ticket\\\\s*(?:id|number|no\\\\.?|#)',\n  'رقم\\\\s*التذكرة',\n  'معرّف\\\\s*التذكرة',\n  'معرف\\\\s*التذكرة'\n]);\n\ncustomer_id = customer_id || labeledValue([\n  'customer\\\\s*(?:id|number|no\\\\.?|#)',\n  'رقم\\\\s*العميل',\n  'معرّف\\\\s*العميل',\n  'معرف\\\\s*العميل'\n]);\n\nif (!ticket_id) {\n  ticket_id = text.match(\n    /\\b(?:ticket\\s*)?(T\\d+)\\b/i\n  )?.[1];\n}\n\nif (!customer_id) {\n  customer_id = text.match(\n    /\\b(?:customer\\s*)?(C\\d+)\\b/i\n  )?.[1];\n}\n\n// ---------- Extract ticket fields ----------\nlet subject = get(\n  'subject', 'title', 'ticket_title', 'ticketTitle'\n);\n\nlet description = get(\n  'description', 'details', 'message', 'ticket_description'\n);\n\nlet status = get('status');\n\nsubject = subject || labeledValue([\n  'subject',\n  'ticket\\\\s*title',\n  'title',\n  'موضوع\\\\s*التذكرة',\n  'موضوع',\n  'عنوان\\\\s*التذكرة',\n  'العنوان'\n]);\n\ndescription = description || labeledValue([\n  'description',\n  'details',\n  'ticket\\\\s*description',\n  'وصف\\\\s*التذكرة',\n  'الوصف',\n  'وصف',\n  'التفاصيل',\n  'تفاصيل'\n]);\n\nstatus = status || labeledValue([\n  'status',\n  'ticket\\\\s*status',\n  'الحالة',\n  'حالة\\\\s*التذكرة',\n  'حالة'\n]);\n\n// ---------- Natural-language update extraction ----------\nif (action === 'update') {\n  const idMatch = text.match(\n    /(?:ticket\\s*(?:id|number|no\\.?)?|التذكرة\\s*(?:رقم\\s*)?|رقم\\s*التذكرة)\\s*[:=#-]?\\s*(T\\d+|[A-Z]+\\d+|\\d+)/i\n  );\n\n  ticket_id = ticket_id || idMatch?.[1];\n\n  subject = subject || text.match(\n    /(?:موضوعها|موضوعه|موضوع التذكرة|العنوان|subject|title)\\s*[:=]?\\s*([^,\\n;|]+)/i\n  )?.[1]?.trim();\n\n  description = description || text.match(\n    /(?:وصفها|وصفه|الوصف|التفاصيل|تفاصيل|description|details)\\s*[:=]?\\s*([^,\\n;|]+)/i\n  )?.[1]?.trim();\n\n  status = status || text.match(\n    /(?:حالتها|حالته|حالة التذكرة|الحالة|status)\\s*[:=]?\\s*([^,\\n;|]+)/i\n  )?.[1]?.trim();\n}\n\n// ---------- Output ----------\nreturn [{\n  json: {\n    ...input,\n    action,\n    ticket_id: normalizeId(ticket_id),\n    customer_id: normalizeId(customer_id),\n    subject: clean(subject),\n    description: clean(description),\n    status: clean(status),\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5008,
+        3472
+      ],
+      "id": "37451f48-0c36-4c74-8c87-389dcf1a3dec",
+      "name": "Prepare Ticket Action"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "view",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "view"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "add",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "add"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "update",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "update"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "delete",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "delete"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "ignoreCase": true
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        5232,
+        3424
+      ],
+      "id": "848ce9a2-5437-486b-bb12-72bfac6f5886",
+      "name": "Switch Ticket Action"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 878532606,
+          "mode": "list",
+          "cachedResultName": "Tickets",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg/edit#gid=878532606"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        6576,
+        2896
+      ],
+      "id": "b792a8c4-58e4-4410-9731-73ea31f39891",
+      "name": "Get Data",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(x => x.json);\n\nconst lines = rows\n  .map(r =>\n    Object.entries(r)\n      .filter(([k]) => k !== 'row_number')\n      .map(([k, v]) => `${k}: ${v}`)\n      .join(' | ')\n  )\n  .join('\\n');\n\nconst original = $('Prepare Ticket Action').first().json;\n\n// IDs of all displayed tickets\nconst entityIds = rows\n  .map(r => String(r.ticket_id || '').trim())\n  .filter(Boolean)\n  .join(', ');\n\nreturn [{\n  json: {\n    ...original,\n    reply: rows.length\n      ? `📋 التذاكر:\\n${lines}`\n      : 'لا توجد بيانات في التذاكر.',\n    result_type: 'ticket_view',\n    audit_action: 'view',\n    audit_status: 'success',\n    entity_id: entityIds\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6800,
+        2896
+      ],
+      "id": "43c14eef-2fa7-4b6f-bcfc-9af30959621a",
+      "name": "Format View Result"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst d = $json || {};\n\nconst mode = String(d.ticket_mode || 'manual').trim().toLowerCase();\nconst isComplaint = mode === 'complaint';\n\n// الحقول الإلزامية تختلف حسب نوع الطلب:\n// manual: جميع الحقول الثلاثة إلزامية.\n// complaint: الموضوع والوصف إلزاميان، ومعرّف العميل غير إلزامي.\nconst requiredFields = isComplaint\n  ? ['subject', 'description']\n  : ['customer_id', 'subject', 'description'];\n\nconst missing = requiredFields.filter((key) =>\n  d[key] === undefined ||\n  d[key] === null ||\n  String(d[key]).trim() === ''\n);\n\nif (missing.length > 0) {\n  const fieldNames = {\n    customer_id: 'رقم العميل (customer_id)',\n    subject: 'موضوع التذكرة (subject)',\n    description: 'وصف المشكلة (description)',\n  };\n\n  const missingNames = missing.map((key) => fieldNames[key] || key);\n\n  return [{\n    json: {\n      ...d,\n      add_valid: false,\n      reply: `⚠️ لا يمكن إضافة التذكرة. يرجى تزويدي بالبيانات الناقصة: ${missingNames.join('، ')}`,\n      result_type: 'ticket_add',\n      audit_action: 'add',\n      audit_status: 'failed',\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    ...d,\n    ticket_mode: isComplaint ? 'complaint' : 'manual',\n    add_valid: true,\n    status: String(d.status || 'Open').trim(),\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5456,
+        3168
+      ],
+      "id": "fac6556c-72a8-4975-8aca-365fd5acddc2",
+      "name": "Prepare Ticket Add"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 878532606,
+          "mode": "list",
+          "cachedResultName": "Tickets",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg/edit#gid=878532606"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "ticket_id": "={{ $json.ticket_id }}",
+            "customer_id": "={{ $json.customer_id }}",
+            "subject": "={{ $json.subject }}",
+            "description": "={{ $json.description }}",
+            "status": "={{ $json.status || 'Open' }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "ticket_id",
+              "displayName": "ticket_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "customer_id",
+              "displayName": "customer_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "subject",
+              "displayName": "subject",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "description",
+              "displayName": "description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        6352,
+        3088
+      ],
+      "id": "2b204440-78af-410c-8aa3-dae66e9e7d16",
+      "name": "Add Ticket",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$('Prepare Ticket Add').first().json; return [{json:{...d,reply:`✅ تمت إضافة التذكرة${d.name?` ${d.name}`:''} بنجاح.`,result_type:'ticket_add',audit_action:'add',audit_status:'success'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6576,
+        3088
+      ],
+      "id": "c35f59f6-a18b-4970-af99-dad04a9a271a",
+      "name": "Format Add Result"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 878532606,
+          "mode": "list",
+          "cachedResultName": "Tickets",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg/edit#gid=878532606"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        5904,
+        3472
+      ],
+      "id": "aaec7c14-0b65-49ec-a46b-0ba0708a79fb",
+      "name": "Get Tickets For Update",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst input = $('Prepare Ticket Action').first()?.json || {};\nconst rows = $input.all().map(item => item.json || {});\n\nconst normalizeId = value =>\n  String(value ?? '').trim().toUpperCase();\n\nconst hasValue = value =>\n  value !== undefined &&\n  value !== null &&\n  String(value).trim() !== '';\n\nconst ticketId = normalizeId(input.ticket_id);\n\nif (!ticketId) {\n  return [{\n    json: {\n      ...input,\n      not_found: true,\n      missing_update_fields: false,\n      reply: '⚠️ أرسل رقم التذكرة التي تريد تعديلها، مثل T003.',\n      result_type: 'ticket_update',\n      audit_action: 'update',\n      audit_status: 'failed'\n    }\n  }];\n}\n\nconst found = rows.find(row =>\n  normalizeId(row.ticket_id || row.id) === ticketId\n);\n\nif (!found) {\n  return [{\n    json: {\n      ...input,\n      ticket_id: ticketId,\n      not_found: true,\n      missing_update_fields: false,\n      reply: `⚠️ التذكرة ${ticketId} غير موجودة، ولم يتم إجراء أي تعديل.`,\n      result_type: 'ticket_update',\n      audit_action: 'update',\n      audit_status: 'failed'\n    }\n  }];\n}\n\nconst fields = [\n  'customer_id',\n  'subject',\n  'description',\n  'status'\n];\n\nconst changed = fields.filter(key => hasValue(input[key]));\n\nif (!changed.length) {\n  return [{\n    json: {\n      ...found,\n      ...input,\n      ticket_id: found.ticket_id || ticketId,\n      not_found: false,\n      missing_update_fields: true,\n      reply: '⚠️ التذكرة موجودة، لكن لم تحدد ما الذي تريد تعديله.',\n      result_type: 'ticket_update',\n      audit_action: 'update',\n      audit_status: 'failed'\n    }\n  }];\n}\n\nconst updateData = {\n  ...found,\n  ...input,\n  ticket_id: found.ticket_id || ticketId,\n  not_found: false,\n  missing_update_fields: false\n};\n\nfor (const key of fields) {\n  updateData[key] = hasValue(input[key])\n    ? input[key]\n    : found[key];\n}\n\nreturn [{ json: updateData }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6128,
+        3472
+      ],
+      "id": "d62e94c4-bff6-491b-b91d-b2277114350a",
+      "name": "Find Ticket To Update"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 878532606,
+          "mode": "list",
+          "cachedResultName": "Tickets",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg/edit#gid=878532606"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "ticket_id": "={{ $json.ticket_id }}",
+            "customer_id": "={{ $json.customer_id }}",
+            "subject": "={{ $json.subject }}",
+            "description": "={{ $json.description }}",
+            "status": "={{ $json.status }}"
+          },
+          "matchingColumns": [
+            "ticket_id"
+          ],
+          "schema": [
+            {
+              "id": "ticket_id",
+              "displayName": "ticket_id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "customer_id",
+              "displayName": "customer_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "subject",
+              "displayName": "subject",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "description",
+              "displayName": "description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        6576,
+        3568
+      ],
+      "id": "fa8d0e0b-52b8-466c-83a1-af8a3ad8763d",
+      "name": "Update Ticket",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$json; return [{json:{...d,reply:`✅ تم تحديث التذكرة ${d.ticket_id||''} بنجاح.`,result_type:'ticket_update',audit_action:'update',audit_status:'success'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6800,
+        3568
+      ],
+      "id": "bf6c7101-15c3-4d4c-863a-d50bf9dddff9",
+      "name": "Format Update Result"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json:{...$json,reply:$json.reply||'⚠️ لم يتم تحديث التذكرة.',result_type:'ticket_update',audit_action:'update',audit_status:$json.audit_status||'failed'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6800,
+        3376
+      ],
+      "id": "9808dc0e-4905-4d0f-8305-d7670b4e71fc",
+      "name": "Format Update Not Found"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 878532606,
+          "mode": "list",
+          "cachedResultName": "Tickets",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg/edit#gid=878532606"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        6128,
+        3856
+      ],
+      "id": "48467d17-6a30-4156-bf28-cc27a0353dbd",
+      "name": "Get Tickets For Delete",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const input=$('Prepare Ticket Action').first().json; const rows=$input.all().map(x=>x.json); const targetId=input.ticket_id; const targetName=(input.name||input.title||'').toString().trim().toLowerCase(); let found; for(const r of rows){const id=(r.ticket_id??r.id??'').toString(); const name=(r.name??r.ticket_name??r.title??r.subject??'').toString().trim().toLowerCase(); if((targetId&&id===targetId.toString())||(targetName&&name===targetName)){found=r;break;}} if(!found)return [{json:{...input,not_found:true,reply:'⚠️ لم يتم العثور على التذكرة المطلوب للحذف.',result_type:'ticket_delete',audit_action:'delete',audit_status:'failed'}}]; return [{json:{...input,...found,row_number:found.row_number,not_found:false}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6352,
+        3856
+      ],
+      "id": "2fa45f2f-0b81-44a9-a8b6-a2f80f4fb38c",
+      "name": "Find Ticket To Delete"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json:{...$json,reply:$json.reply||'⚠️ لم يتم حذف التذكرة.',result_type:'ticket_delete',audit_action:'delete',audit_status:$json.audit_status||'failed'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6800,
+        3760
+      ],
+      "id": "663e06db-24a4-4b1f-8be1-5aead91ff2ba",
+      "name": "Format Delete Not Found"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json:{...$json,reply:$json.reply||'⚠️ العملية غير مدعومة. استخدم view أو add أو update أو delete.',result_type:'ticket',audit_action:$json.action||'unknown',audit_status:$json.audit_status||'failed'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6800,
+        4144
+      ],
+      "id": "5eb4619f-89ab-436f-8168-7bf8c1fba59a",
+      "name": "Unsupported Ticket Action"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "3lWlOHWA5Eg21KAV",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/3lWlOHWA5Eg21KAV",
+          "cachedResultName": "WF-08 Audit Logging"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "user_id": "={{ $json.user_id || \"system\" }}",
+            "user_name": "={{ $json.user_name || \"\" }}",
+            "role": "={{ $json.role || \"\" }}",
+            "action": "={{ $json.audit_action || $json.action || \"operation\" }}",
+            "status": "={{ $json.audit_status || \"success\" }}",
+            "intent": "ticket",
+            "entity_type": "Ticket",
+            "entity_id": "={ $json.ticket_id || $json.entity_id || \"\" }",
+            "details": "={{ $json.reply || \"\" }}",
+            "reply": "={{ $json.reply || \"\" }}",
+            "result_type": "={{ $json.result_type || \"\" }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        7024,
+        3376
+      ],
+      "id": "0665a900-ee11-4e6b-ad7c-1321cb012d10",
+      "name": "Call WF-08 Audit Logging"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 878532606,
+          "mode": "list",
+          "cachedResultName": "Tickets",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg/edit#gid=878532606"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        5904,
+        3088
+      ],
+      "id": "262ed1d9-e85d-4964-8b11-9407e4a195df",
+      "name": "Get Tickets For Add",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$('Prepare Ticket Add').first().json; const rows=$('Get Tickets For Add').all().map(x=>x.json||{}); const last=rows.slice().reverse().find(r=>/^T\\d+$/i.test(String(r.ticket_id||'').trim())); const m=last?String(last.ticket_id).trim().toUpperCase().match(/^T(\\d+)$/):null; const id=`T${String((m?Number(m[1]):0)+1).padStart(3,'0')}`; return [{json:{...d,ticket_id:id,status:String(d.status||'Open')}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6128,
+        3088
+      ],
+      "id": "6de92a7a-332c-454b-b868-9d920772326a",
+      "name": "Prepare Ticket Add Final"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "DDJ5sZEMlXY14ein",
+          "mode": "list",
+          "cachedResultName": "WF-02 Approval Management"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chat_id": "={{ $json.chat_id }}",
+            "user_id": "={{ $json.user_id }}",
+            "user_name": "={{ $json.user_name }}",
+            "role": "={{ $json.role }}",
+            "action": "delete",
+            "entity_type": "Ticket",
+            "entity_id": "={{ $json.ticket_id }}",
+            "ticket_id": "={{ $json.ticket_id }}",
+            "request": "={{ $json.request }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        6800,
+        3952
+      ],
+      "id": "9787c78d-d787-4e94-befc-b92a7be518ba",
+      "name": "Call WF-02 Approval Management"
+    },
+    {
+      "parameters": {
+        "sendTo": "manager@example.com",
+        "subject": "OpsMind AI | تمت إضافة Ticket جديد",
+        "message": "={{ `<!DOCTYPE html><html><body style=\"margin:0;background:#f4f7fb;font-family:Arial,sans-serif;color:#1f2937\"><div style=\"max-width:640px;margin:30px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 6px 24px rgba(0,0,0,.08)\"><div style=\"background:#0f766e;color:#fff;padding:24px\"><h2 style=\"margin:0\">OpsMind AI</h2><p style=\"margin:8px 0 0\">تمت إضافة Ticket جديد بنجاح</p></div><div style=\"padding:24px\"><p>تم تنفيذ العملية بنجاح في نظام OpsMind AI.</p><table style=\"width:100%;border-collapse:collapse\"><tr><td style=\"padding:10px;border-bottom:1px solid #eee;font-weight:bold\">الرقم</td><td style=\"padding:10px;border-bottom:1px solid #eee\">${$json['ticket_id'] || '-'}</td></tr><tr><td style=\"padding:10px;border-bottom:1px solid #eee;font-weight:bold\">الموضوع</td><td style=\"padding:10px;border-bottom:1px solid #eee\">${$json.subject || '-'}</td></tr><tr><td style=\"padding:10px;font-weight:bold\">التاريخ</td><td style=\"padding:10px\">${new Date().toLocaleString('ar-EG')}</td></tr></table><p style=\"margin-top:24px;color:#6b7280\">هذه رسالة آلية من OpsMind AI.</p></div></div></body></html>` }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        6800,
+        3088
+      ],
+      "id": "c271b846-87ef-481a-b1f6-8a9292c8f410",
+      "name": "Send Add Ticket Email",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Gmail account 4"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f28b6999-b8b2-449e-8165-858b40eb254f",
+              "leftValue": "={{ $json.not_found }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        6576,
+        3856
+      ],
+      "id": "78f1cf58-aa7f-4fe3-8644-ac76c7fc37a5",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "d8320ab3-8770-4c72-bfd9-5e76207c4f82",
+              "leftValue": "={{ $json.not_found === true || $json.missing_update_fields === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        6352,
+        3472
+      ],
+      "id": "f8a853a7-0932-4b9c-8294-1868d8991dab",
+      "name": "Update Target Found?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a04c8bba-2db3-498b-98ec-91a6fb70340d",
+              "leftValue": "={{ $json.add_valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        5680,
+        3168
+      ],
+      "id": "169a44aa-a5e4-46db-95ab-1ac6f36259ea",
+      "name": "Ticket Add Valid?"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Prepare Ticket Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Ticket Action": {
+      "main": [
+        [
+          {
+            "node": "Switch Ticket Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch Ticket Action": {
+      "main": [
+        [
+          {
+            "node": "Get Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Ticket Add",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Tickets For Update",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Tickets For Delete",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unsupported Ticket Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Data": {
+      "main": [
+        [
+          {
+            "node": "Format View Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format View Result": {
+      "main": [
+        [
+          {
+            "node": "Call WF-08 Audit Logging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Ticket Add": {
+      "main": [
+        [
+          {
+            "node": "Ticket Add Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Ticket": {
+      "main": [
+        [
+          {
+            "node": "Format Add Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Add Result": {
+      "main": [
+        [
+          {
+            "node": "Send Add Ticket Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Tickets For Update": {
+      "main": [
+        [
+          {
+            "node": "Find Ticket To Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Ticket To Update": {
+      "main": [
+        [
+          {
+            "node": "Update Target Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Ticket": {
+      "main": [
+        [
+          {
+            "node": "Format Update Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Update Result": {
+      "main": [
+        [
+          {
+            "node": "Call WF-08 Audit Logging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Update Not Found": {
+      "main": [
+        [
+          {
+            "node": "Call WF-08 Audit Logging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Tickets For Delete": {
+      "main": [
+        [
+          {
+            "node": "Find Ticket To Delete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Ticket To Delete": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Delete Not Found": {
+      "main": [
+        [
+          {
+            "node": "Call WF-08 Audit Logging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unsupported Ticket Action": {
+      "main": [
+        [
+          {
+            "node": "Call WF-08 Audit Logging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Tickets For Add": {
+      "main": [
+        [
+          {
+            "node": "Prepare Ticket Add Final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Ticket Add Final": {
+      "main": [
+        [
+          {
+            "node": "Add Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Add Ticket Email": {
+      "main": [
+        [
+          {
+            "node": "Call WF-08 Audit Logging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Format Delete Not Found",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call WF-02 Approval Management",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Target Found?": {
+      "main": [
+        [
+          {
+            "node": "Format Update Not Found",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ticket Add Valid?": {
+      "main": [
+        [
+          {
+            "node": "Get Tickets For Add",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call WF-08 Audit Logging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "4gRXNAKnlMatvg6L",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "3a08c173-cf0d-4169-a194-d5d0e6f186bb",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "nodeGroups": [],
+  "id": "ZA1r2oik7I3LiDnR",
+  "tags": []
+}
