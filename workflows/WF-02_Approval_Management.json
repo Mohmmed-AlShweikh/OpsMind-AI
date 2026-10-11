@@ -1,0 +1,2037 @@
+{
+  "name": "WF-02 Approval Management",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        15168,
+        10592
+      ],
+      "id": "651b068d-cafd-4620-bc9d-e078f7628e1a",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$json||{}; const action=String(d.action||'').toLowerCase();\nif(['approve','reject'].includes(action)) return [{json:{...d,decision:action==='approve'?'Approved':'Rejected',decision_valid:true,approval_id:String(d.approval_id||'')}}];\nconst amount=Number(d.amount||0); const et=String(d.entity_type||'').toLowerCase();\nconst required=amount>1000 || (['customer','order','ticket'].includes(et)&&action==='delete');\nif(!required) return [{json:{...d,approval_required:false,approval_status:'Auto Approved'}}];\nreturn [{json:{...d,approval_id:String(d.approval_id||`APR-${Date.now()}`),approval_required:true,approval_status:'Pending'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        15392,
+        10592
+      ],
+      "id": "423bc30a-2a7f-4956-9722-b3f184165b2a",
+      "name": "Prepare Approval"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.approval_required }}",
+              "operation": "true"
+            }
+          ],
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        19200,
+        9840
+      ],
+      "id": "5d4e2242-d380-452f-977c-664bf1c60c90",
+      "name": "Approval Required?"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1926884083,
+          "mode": "list",
+          "cachedResultName": "Approvals",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg/edit#gid=1926884083"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "approval_id": "={{ $json.approval_id }}",
+            "entity_type": "={{ $json.entity_type || 'Invoice' }}",
+            "entity_id": "={{ $json.entity_id || $json.invoice_id || $json.customer_id || $json.order_id || $json.ticket_id || '' }}",
+            "requested_by": "={{ $json.user_id || 'system' }}",
+            "status": "Pending",
+            "approved_by": "",
+            "date": "={{ new Date().toISOString() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "approval_id",
+              "displayName": "approval_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "entity_type",
+              "displayName": "entity_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "entity_id",
+              "displayName": "entity_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "requested_by",
+              "displayName": "requested_by",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "approved_by",
+              "displayName": "approved_by",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        19424,
+        9744
+      ],
+      "id": "0ebd5e03-1288-4a28-bccc-d9aca58f0920",
+      "name": "Create Approval",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const j=$('Prepare Approval').first().json; const et=String(j.entity_type||'Invoice');\nconst label=et==='Customer'?`العميل: ${j.customer_name||j.customer_id||j.entity_id||'-'}`:et==='Order'?`الطلب: ${j.order_id||j.entity_id||'-'}`:et==='Ticket'?`التذكرة: ${j.ticket_id||j.entity_id||'-'}`:`الفاتورة: ${j.invoice_number||j.invoice_id||j.entity_id||'-'}\\nالمبلغ: ${j.amount||'-'}`;\nreturn [{json:{...j,manager_chat_id:'YOUR_MANAGER_CHAT_ID',reply:`🔔 طلب موافقة جديد\\n\\n${label}\\nرقم الموافقة: ${j.approval_id}\\n\\nاضغط أحد الأزرار أدناه لاتخاذ القرار.`,result_type:'approval_request'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        19648,
+        9744
+      ],
+      "id": "751f1579-2455-45ed-bfd0-1494b2c06f2e",
+      "name": "Prepare Manager Notification"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.manager_chat_id }}",
+        "text": "={{ $json.reply }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "✅ موافقة",
+                    "additionalFields": {
+                      "callback_data": "={{ 'approve|' + $json.approval_id }}"
+                    }
+                  },
+                  {
+                    "text": "❌ رفض",
+                    "additionalFields": {
+                      "callback_data": "={{ 'reject|' + $json.approval_id }}"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        19872,
+        9744
+      ],
+      "id": "e4202c2b-bebb-478e-b08a-11e3da7c9fdc",
+      "name": "Send Manager Approval",
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Telegram account 18"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const j=$('Prepare Approval').first().json; return [{json:{...j,reply:`🟡 تم إرسال طلب الموافقة للمدير.\\nرقم الموافقة: ${j.approval_id}`,approval_id:j.approval_id,approval_status:'Pending',result_type:'approval'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        20096,
+        9744
+      ],
+      "id": "5d85c400-8990-4846-979b-a4ce6138619c",
+      "name": "Return Pending Approval"
+    },
+    {
+      "parameters": {
+        "jsCode": "const j=$('Prepare Approval').first().json; return [{json:{...j,reply:'✅ تمت الموافقة تلقائياً لأن العملية لا تتطلب موافقة المدير.',approval_status:'Auto Approved',result_type:'approval'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        20096,
+        9936
+      ],
+      "id": "c52ff482-83d6-4760-841b-772b8e9ca9e5",
+      "name": "Return Auto Approved"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$json||{}; const a=String(d.action||'').toLowerCase(); const decision=a==='approve'?'Approved':a==='reject'?'Rejected':''; return [{json:{...d,decision,decision_valid:!!decision,approval_id:String(d.approval_id||'')}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        15840,
+        10928
+      ],
+      "id": "fa9eb1f3-0cf7-4d4b-a8df-73b246fe0168",
+      "name": "Parse Manager Decision"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1926884083,
+          "mode": "list",
+          "cachedResultName": "Approvals"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        16064,
+        10928
+      ],
+      "id": "ee4bc405-da8b-4ac0-8c2b-d41e7a70a77d",
+      "name": "Get Approval Records",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$('Parse Manager Decision').first().json; const rows=$input.all().map(x=>x.json||{}); const id=String(d.approval_id||'').toLowerCase(); const f=[...rows].reverse().find(r=>String(r.approval_id||'').toLowerCase()===id && String(r.status||'').toLowerCase()==='pending'); return [f?{json:{...d,...f,approval_not_found:false}}:{json:{...d,approval_not_found:true,reply:`⚠️ لم يتم العثور على موافقة معلقة بالرقم ${d.approval_id||'-'}.`}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        16288,
+        10928
+      ],
+      "id": "32d4b9de-247a-417d-933c-bf465134ff7e",
+      "name": "Find Approval Record"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.decision_valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        15616,
+        10592
+      ],
+      "id": "33c297c6-d67c-46e9-b15b-86b716d1ea33",
+      "name": "Decision Request?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.approval_not_found }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        16512,
+        10928
+      ],
+      "id": "0a93e7e4-a739-44b4-b6ff-aa5a11b2c11e",
+      "name": "Approval Found?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ String($json.callback_user_id||$json.user_id||'') === 'YOUR_MANAGER_CHAT_ID' || String($json.role||'') === 'Manager' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        16736,
+        10832
+      ],
+      "id": "cb3836e1-5dc4-4d80-8959-03e4183a503f",
+      "name": "Manager Authorized?"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1926884083,
+          "mode": "list",
+          "cachedResultName": "Approvals"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "approval_id": "={{ $json.approval_id }}",
+            "entity_type": "={{ $json.entity_type }}",
+            "entity_id": "={{ $json.entity_id }}",
+            "requested_by": "={{ $json.requested_by }}",
+            "status": "={{ $json.decision }}",
+            "approved_by": "={{ $json.callback_user_id || $json.user_id || 'Manager' }}",
+            "date": "={{ new Date().toISOString() }}"
+          },
+          "matchingColumns": [
+            "approval_id"
+          ],
+          "schema": [
+            {
+              "id": "approval_id",
+              "displayName": "approval_id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "entity_type",
+              "displayName": "entity_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "entity_id",
+              "displayName": "entity_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "requested_by",
+              "displayName": "requested_by",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "approved_by",
+              "displayName": "approved_by",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        16960,
+        10752
+      ],
+      "id": "6ecc734e-9303-4716-b1e9-0c4fb99bc73b",
+      "name": "Update Approval Decision",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.decision }}",
+              "rightValue": "Approved",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        17408,
+        10752
+      ],
+      "id": "d0ad970c-6df9-49cc-b39a-341abddb0f64",
+      "name": "Decision Approved?"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.entity_type }}",
+                    "rightValue": "Customer",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Customer"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.entity_type }}",
+                    "rightValue": "Order",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Order"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.entity_type }}",
+                    "rightValue": "Ticket",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Ticket"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.entity_type }}",
+                    "rightValue": "Invoice",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Invoice"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "ignoreCase": true
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        17632,
+        10560
+      ],
+      "id": "cb9c7fa2-93e9-4a09-8420-1ffc2e8836fe",
+      "name": "Approved Entity Type?"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1635465681,
+          "mode": "list",
+          "cachedResultName": "Customers"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        17856,
+        10112
+      ],
+      "id": "c38839fb-f5aa-48d3-8454-0793e81987cb",
+      "name": "Get Customers For Approved Delete",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$('Update Approval Decision').first().json; const rows=$input.all().map(x=>x.json||{}); const id=String(d.entity_id||''); const f=rows.find(r=>String(r.customer_id||'')===id); return [f?{json:{...d,...f,delete_found:true}}:{json:{...d,delete_found:false,reply:`⚠️ تمت الموافقة لكن السجل ${id} غير موجود.`}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        18080,
+        10112
+      ],
+      "id": "83662c0f-2c8a-41ae-ad13-3a73bab55940",
+      "name": "Find Customer Delete Row"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.delete_found }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        18304,
+        10112
+      ],
+      "id": "c3727bd7-9fc4-4fe8-8fbe-1d5601af5bfd",
+      "name": "Customer Delete Found?"
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1635465681,
+          "mode": "list",
+          "cachedResultName": "Customers",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg/edit#gid=1635465681"
+        },
+        "startIndex": "={{ $('Find Customer Delete Row').first().json.row_number }}"
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        18528,
+        10016
+      ],
+      "id": "88778ac5-371c-481f-b591-426f5e4dc8eb",
+      "name": "Delete Approved Customer",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$('Find Customer Delete Row').first()?.json||$('Update Approval Decision').first().json||{}; return [{json:{...d,delete_completed:true,delete_found:true}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        18752,
+        10016
+      ],
+      "id": "857ed5c7-06c9-42ec-af1e-3bccf6bb04d0",
+      "name": "Mark Customer Delete Complete"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 411613722,
+          "mode": "list",
+          "cachedResultName": "Orders"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        17856,
+        10400
+      ],
+      "id": "c4189faa-c31c-4c41-a6d5-bdbbdb280b13",
+      "name": "Get Orders For Approved Delete",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$('Update Approval Decision').first().json; const rows=$input.all().map(x=>x.json||{}); const id=String(d.entity_id||''); const f=rows.find(r=>String(r.order_id||'')===id); return [f?{json:{...d,...f,delete_found:true}}:{json:{...d,delete_found:false,reply:`⚠️ تمت الموافقة لكن السجل ${id} غير موجود.`}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        18080,
+        10400
+      ],
+      "id": "f4271e7b-3de0-4126-b405-4deb18685bf0",
+      "name": "Find Order Delete Row"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.delete_found }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        18304,
+        10400
+      ],
+      "id": "ebe66f79-620a-4a9f-af93-5bdd0fd76f38",
+      "name": "Order Delete Found?"
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 411613722,
+          "mode": "list",
+          "cachedResultName": "Orders",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg/edit#gid=411613722"
+        },
+        "startIndex": "={{ $('Find Order Delete Row').first().json.row_number }}"
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        18528,
+        10304
+      ],
+      "id": "faf1c564-7d8a-4163-96b6-e2bd019db4b9",
+      "name": "Delete Approved Order",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$('Find Order Delete Row').first()?.json||$('Update Approval Decision').first().json||{}; return [{json:{...d,delete_completed:true,delete_found:true}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        18752,
+        10304
+      ],
+      "id": "777fc4fd-8f43-4c65-aabd-7745c7fd4a20",
+      "name": "Mark Order Delete Complete"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 878532606,
+          "mode": "list",
+          "cachedResultName": "Tickets"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        17856,
+        10688
+      ],
+      "id": "a159b5de-4417-402b-8dd2-235d1b187bcf",
+      "name": "Get Tickets For Approved Delete",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$('Update Approval Decision').first().json; const rows=$input.all().map(x=>x.json||{}); const id=String(d.entity_id||''); const f=rows.find(r=>String(r.ticket_id||'')===id); return [f?{json:{...d,...f,delete_found:true}}:{json:{...d,delete_found:false,reply:`⚠️ تمت الموافقة لكن السجل ${id} غير موجود.`}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        18080,
+        10688
+      ],
+      "id": "529c7bff-dd06-45f5-8ec3-a08bb0c0f96f",
+      "name": "Find Ticket Delete Row"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.delete_found }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        18304,
+        10688
+      ],
+      "id": "5697d142-7cc5-4b2e-a7df-26989641fa56",
+      "name": "Ticket Delete Found?"
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 878532606,
+          "mode": "list",
+          "cachedResultName": "Tickets",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg/edit#gid=878532606"
+        },
+        "startIndex": "={{ $('Find Ticket Delete Row').first().json.row_number }}"
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        18528,
+        10592
+      ],
+      "id": "1537e7c8-3849-45bb-8705-5df6230f939f",
+      "name": "Delete Approved Ticket",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$('Find Ticket Delete Row').first()?.json||$('Update Approval Decision').first().json||{}; return [{json:{...d,delete_completed:true,delete_found:true}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        18752,
+        10592
+      ],
+      "id": "e4dde266-0793-413d-9a9c-879fe2874cda",
+      "name": "Mark Ticket Delete Complete"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1558027212,
+          "mode": "list",
+          "cachedResultName": "Invoices"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        18528,
+        10880
+      ],
+      "id": "e2ec6d29-4f28-46e5-ae70-d03a1594770c",
+      "name": "Get Invoice For Approval Decision",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$('Update Approval Decision').first().json; const rows=$input.all().map(x=>x.json||{}); const id=String(d.entity_id||''); const f=rows.find(r=>String(r.invoice_id||'')===id); return [f?{json:{...d,...f,invoice_found:true}}:{json:{...d,invoice_found:false,reply:`⚠️ الفاتورة ${id} غير موجودة.`}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        18752,
+        10880
+      ],
+      "id": "64bfa8d8-b02a-4132-bdf4-28b3e6652ecc",
+      "name": "Find Invoice Approval Row"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1558027212,
+          "mode": "list",
+          "cachedResultName": "Invoices"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "invoice_id": "={{ $json.invoice_id }}",
+            "supplier_id": "={{ $json.supplier_id }}",
+            "invoice_number": "={{ $json.invoice_number }}",
+            "amount": "={{ $json.amount }}",
+            "date": "={{ $json.date }}",
+            "status": "={{ $json.decision === 'Approved' ? 'Approved' : 'Rejected' }}",
+            "approval_status": "={{ $json.decision }}"
+          },
+          "matchingColumns": [
+            "invoice_id"
+          ],
+          "schema": [
+            {
+              "id": "invoice_id",
+              "displayName": "invoice_id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "supplier_id",
+              "displayName": "supplier_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "invoice_number",
+              "displayName": "invoice_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "amount",
+              "displayName": "amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "approval_status",
+              "displayName": "approval_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        18976,
+        10880
+      ],
+      "id": "033ec3b4-915a-4a6e-bb4b-2471e2e1b0f7",
+      "name": "Update Invoice After Approval",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst base = $('Update Approval Decision').first().json || {};\nconst cur = $json || {};\nconst d = { ...base, ...cur };\n\n// Use the recorded decision, with status as a fallback.\nconst decision = d.decision || d.status;\n\nconst approved = decision === 'Approved';\nconst rejected = decision === 'Rejected';\n\nlet reply = approved\n  ? `✅ تمت الموافقة على ${d.approval_id || ''}.`\n  : rejected\n    ? `❌ تم رفض ${d.approval_id || ''}.`\n    : `⚠️ تعذّر تحديد نتيجة الموافقة للطلب ${d.approval_id || ''}.`;\n\nif (approved && d.delete_completed === true) {\n  reply = `🗑️ تمت الموافقة على حذف ${d.entity_type || ''} ${d.entity_id || ''} وتنفيذ الحذف.`;\n}\n\nif (d.delete_found === false || d.invoice_found === false) {\n  reply = d.reply || `⚠️ لم يتم العثور على العنصر المطلوب ${d.entity_id || ''}.`;\n}\n\nreturn [{\n  json: {\n    ...d,\n    decision,\n    reply,\n    audit_action: d.action === 'delete'\n      ? 'delete'\n      : approved\n        ? 'approve'\n        : rejected\n          ? 'reject'\n          : 'unknown',\n    audit_status:\n      decision === 'Approved' || decision === 'Rejected'\n        ? 'success'\n        : 'failed'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        19200,
+        10560
+      ],
+      "id": "5cb0eb1e-a55a-47d1-b881-fea03f318889",
+      "name": "Prepare Decision Result"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Users"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        19424,
+        10560
+      ],
+      "id": "93faab89-9ef5-40d7-84d1-6c921e94b467",
+      "name": "Get Requester User",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$('Prepare Decision Result').first().json; const rows=$input.all().map(x=>x.json||{}); const u=rows.find(r=>String(r.user_id||'')===String(d.requested_by||'')); return [{json:{...d,requester_chat_id:String(u?.telegram_id||'')}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        19648,
+        10560
+      ],
+      "id": "66518b0f-8c38-4733-91a9-514d6441ab61",
+      "name": "Find Requester User"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.requester_chat_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        19872,
+        10560
+      ],
+      "id": "6fde544d-da7f-4b1f-8522-0dfc403ea2e2",
+      "name": "Requester Chat Available?"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.requester_chat_id }}",
+        "text": "={{ $json.reply }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        20096,
+        10128
+      ],
+      "id": "6d6e5edb-26ef-4fd3-9ef8-ec635ea95093",
+      "name": "Notify Requester",
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Telegram account 18"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "3lWlOHWA5Eg21KAV",
+          "mode": "list",
+          "cachedResultName": "WF-08 Audit Logging"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "user_id": "={{ $json.requested_by || 'system' }}",
+            "user_name": "={{ $json.user_name || '' }}",
+            "role": "={{ $json.role || 'Manager' }}",
+            "action": "={{ $json.audit_action || 'approve' }}",
+            "status": "={{ $json.audit_status || 'success' }}",
+            "intent": "approval",
+            "entity_type": "={{ $json.entity_type || 'Approval' }}",
+            "entity_id": "={{ $json.entity_id || $json.approval_id || '' }}",
+            "details": "={{ $json.reply || '' }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        20320,
+        10560
+      ],
+      "id": "256a6690-8f8c-41ec-86b1-ba6f7fd40f5e",
+      "name": "Call WF-08 Audit Logging"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json:$json}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        20544,
+        10560
+      ],
+      "id": "861c1448-e766-4e6c-8548-ef0bc959f33f",
+      "name": "Return Decision Result"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json:{...$json,reply:$json.reply||'⚠️ تعذر تنفيذ قرار الموافقة.',audit_action:'approve',audit_status:'failed'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        20096,
+        11328
+      ],
+      "id": "6eabaf65-5036-48aa-bd58-379eaa430e55",
+      "name": "Approval Decision Failed"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json:{...$json,reply:'⛔ فقط المدير المخول يستطيع تنفيذ قرار الموافقة.',audit_action:'approve',audit_status:'failed'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        20096,
+        11136
+      ],
+      "id": "2c4f8351-1580-4a46-bf2e-8c3ea611a192",
+      "name": "Unauthorized Approval Decision"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$json||{}; const original=$('Find Approval Record').first().json||{}; const parsed=$('Parse Manager Decision').first().json||{}; return [{json:{...original,...parsed,...d,decision:parsed.decision||original.decision||d.status,decision_valid:true,approval_id:parsed.approval_id||original.approval_id||d.approval_id}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        17184,
+        10752
+      ],
+      "id": "ad8e00c5-3cb3-46e7-9f73-f296fb53bf00",
+      "name": "Preserve Decision Context"
+    },
+    {
+      "parameters": {
+        "sendTo": "manager@example.com",
+        "subject": "OpsMind AI | تم حذف سجل",
+        "message": "={{ `<!DOCTYPE html><html><body style=\"margin:0;background:#f4f7fb;font-family:Arial,sans-serif;color:#1f2937\"><div style=\"max-width:640px;margin:30px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 6px 24px rgba(0,0,0,.08)\"><div style=\"background:#b91c1c;color:#fff;padding:24px\"><h2 style=\"margin:0\">OpsMind AI</h2><p style=\"margin:8px 0 0\">تم حذف سجل بعد موافقة المدير</p></div><div style=\"padding:24px\"><p>تم تنفيذ عملية الحذف بنجاح بعد موافقة المدير عبر Telegram.</p><table style=\"width:100%;border-collapse:collapse\"><tr><td style=\"padding:10px;border-bottom:1px solid #eee;font-weight:bold\">النوع</td><td style=\"padding:10px;border-bottom:1px solid #eee\">${$json.entity_type || '-'}</td></tr><tr><td style=\"padding:10px;border-bottom:1px solid #eee;font-weight:bold\">الرقم</td><td style=\"padding:10px;border-bottom:1px solid #eee\">${$json.entity_id || '-'}</td></tr><tr><td style=\"padding:10px;border-bottom:1px solid #eee;font-weight:bold\">الاسم/الوصف</td><td style=\"padding:10px;border-bottom:1px solid #eee\">${$json.name || $json.subject || $json.customer_name || $json.order_id || '-'}</td></tr><tr><td style=\"padding:10px;font-weight:bold\">تاريخ التنفيذ</td><td style=\"padding:10px\">${new Date().toLocaleString('ar-EG')}</td></tr></table><p style=\"margin-top:24px;color:#6b7280\">هذه رسالة آلية من OpsMind AI.</p></div></div></body></html>` }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        18976,
+        10016
+      ],
+      "id": "64eb6379-1d70-482b-a0cf-aad79265a63c",
+      "name": "Send Delete Completion Email",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Gmail account 4"
+        }
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Prepare Approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Approval": {
+      "main": [
+        [
+          {
+            "node": "Decision Request?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decision Request?": {
+      "main": [
+        [
+          {
+            "node": "Parse Manager Decision",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Approval Required?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approval Required?": {
+      "main": [
+        [
+          {
+            "node": "Create Approval",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Auto Approved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Approval": {
+      "main": [
+        [
+          {
+            "node": "Prepare Manager Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Manager Notification": {
+      "main": [
+        [
+          {
+            "node": "Send Manager Approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Manager Approval": {
+      "main": [
+        [
+          {
+            "node": "Return Pending Approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Return Pending Approval": {
+      "main": [
+        [
+          {
+            "node": "Call WF-08 Audit Logging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Return Auto Approved": {
+      "main": [
+        [
+          {
+            "node": "Call WF-08 Audit Logging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Manager Decision": {
+      "main": [
+        [
+          {
+            "node": "Get Approval Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Approval Records": {
+      "main": [
+        [
+          {
+            "node": "Find Approval Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Approval Record": {
+      "main": [
+        [
+          {
+            "node": "Approval Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approval Found?": {
+      "main": [
+        [
+          {
+            "node": "Manager Authorized?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Approval Decision Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manager Authorized?": {
+      "main": [
+        [
+          {
+            "node": "Update Approval Decision",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unauthorized Approval Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Approval Decision": {
+      "main": [
+        [
+          {
+            "node": "Preserve Decision Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decision Approved?": {
+      "main": [
+        [
+          {
+            "node": "Approved Entity Type?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Decision Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approved Entity Type?": {
+      "main": [
+        [
+          {
+            "node": "Get Customers For Approved Delete",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Orders For Approved Delete",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Tickets For Approved Delete",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Invoice For Approval Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Customers For Approved Delete": {
+      "main": [
+        [
+          {
+            "node": "Find Customer Delete Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Customer Delete Row": {
+      "main": [
+        [
+          {
+            "node": "Customer Delete Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Customer Delete Found?": {
+      "main": [
+        [
+          {
+            "node": "Delete Approved Customer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Decision Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Approved Customer": {
+      "main": [
+        [
+          {
+            "node": "Mark Customer Delete Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Customer Delete Complete": {
+      "main": [
+        [
+          {
+            "node": "Send Delete Completion Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Orders For Approved Delete": {
+      "main": [
+        [
+          {
+            "node": "Find Order Delete Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Order Delete Row": {
+      "main": [
+        [
+          {
+            "node": "Order Delete Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Order Delete Found?": {
+      "main": [
+        [
+          {
+            "node": "Delete Approved Order",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Decision Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Approved Order": {
+      "main": [
+        [
+          {
+            "node": "Mark Order Delete Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Order Delete Complete": {
+      "main": [
+        [
+          {
+            "node": "Send Delete Completion Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Tickets For Approved Delete": {
+      "main": [
+        [
+          {
+            "node": "Find Ticket Delete Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Ticket Delete Row": {
+      "main": [
+        [
+          {
+            "node": "Ticket Delete Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ticket Delete Found?": {
+      "main": [
+        [
+          {
+            "node": "Delete Approved Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Decision Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Approved Ticket": {
+      "main": [
+        [
+          {
+            "node": "Mark Ticket Delete Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Ticket Delete Complete": {
+      "main": [
+        [
+          {
+            "node": "Send Delete Completion Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Invoice For Approval Decision": {
+      "main": [
+        [
+          {
+            "node": "Find Invoice Approval Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Invoice Approval Row": {
+      "main": [
+        [
+          {
+            "node": "Update Invoice After Approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Invoice After Approval": {
+      "main": [
+        [
+          {
+            "node": "Prepare Decision Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Decision Result": {
+      "main": [
+        [
+          {
+            "node": "Get Requester User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Requester User": {
+      "main": [
+        [
+          {
+            "node": "Find Requester User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Requester User": {
+      "main": [
+        [
+          {
+            "node": "Requester Chat Available?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Requester Chat Available?": {
+      "main": [
+        [
+          {
+            "node": "Notify Requester",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call WF-08 Audit Logging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Requester": {
+      "main": [
+        [
+          {
+            "node": "Call WF-08 Audit Logging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call WF-08 Audit Logging": {
+      "main": [
+        [
+          {
+            "node": "Return Decision Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approval Decision Failed": {
+      "main": [
+        [
+          {
+            "node": "Call WF-08 Audit Logging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unauthorized Approval Decision": {
+      "main": [
+        [
+          {
+            "node": "Call WF-08 Audit Logging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preserve Decision Context": {
+      "main": [
+        [
+          {
+            "node": "Decision Approved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Delete Completion Email": {
+      "main": [
+        [
+          {
+            "node": "Prepare Decision Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "4gRXNAKnlMatvg6L",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "819c35ae-0b1f-401b-a2ea-296b3d81151a",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "nodeGroups": [],
+  "id": "DDJ5sZEMlXY14ein",
+  "tags": []
+}

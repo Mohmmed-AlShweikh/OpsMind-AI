@@ -1,0 +1,1309 @@
+{
+  "name": "WF-01 Invoice Processing",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        3392,
+        2192
+      ],
+      "id": "919ae6e1-1e33-4079-8f4b-ebe50ce9dbeb",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1558027212,
+          "mode": "list",
+          "cachedResultName": "Invoices",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg/edit#gid=1558027212"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3616,
+        2192
+      ],
+      "id": "f7ab73d4-7808-421e-8bdd-af51f0b70a57",
+      "name": "Get Invoices",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst input = $('When Executed by Another Workflow').first().json || {};\nconst request = String(input.request || '').trim();\n\nconst isCreateRequest =\n  /إضافة\\s+فاتورة|اضف\\s+فاتورة|أضف\\s+فاتورة|انشاء\\s+فاتورة|إنشاء\\s+فاتورة|فاتورة\\s+جديدة/i.test(request);\n\nconst isUpdateRequest =\n  /عدل|عدّل|تعديل|غيّر|غير|اجعل|حدّث|حدث/i.test(request);\n\nconst incomingAction = String(input.action || 'view').toLowerCase();\n\nconst action = isCreateRequest || incomingAction === 'add'\n  ? 'add'\n  : isUpdateRequest || incomingAction === 'update'\n    ? 'update'\n    : incomingAction;\n\n// استخراج رقم الفاتورة، بما في ذلك الصيغة: فاتورة رقم INV004\nconst invoiceMatch =\n  request.match(/(?:invoice[_\\s-]*id|invoice\\s*(?:number|no\\.?)|رقم\\s+الفاتورة|فاتورة\\s+رقم|الفاتورة)\\s*[:=#-]?\\s*([A-Za-z0-9_-]+)/i);\n\n// استخراج رقم المورد، بما في ذلك الصيغة: للمورد S004\nconst supplierMatch =\n  request.match(/(?:supplier[_\\s-]*id|رقم\\s+المورد|للمورد|المورد)\\s*[:=#-]?\\s*([A-Za-z0-9_-]+)/i);\n\n// استخراج المبلغ\nconst amountMatch =\n  request.match(/(?:المبلغ|مبلغها|بمبلغ|مبلغ|amount)\\s*(?:إلى|الى|يساوي|بمقدار|=|:)?\\s*(\\d+(?:\\.\\d+)?)/i);\n\nreturn $input.all().map(item => {\n  const r = {\n    ...item.json,\n    request,\n    request_action: action,\n    requested_invoice_id: invoiceMatch ? invoiceMatch[1] : '',\n    requested_supplier_id: supplierMatch ? supplierMatch[1] : '',\n    chat_id: String(input.chat_id || ''),\n    user_id: String(input.user_id || ''),\n    user_name: String(input.user_name || ''),\n    role: String(input.role || ''),\n    intent: 'invoice'\n  };\n\n  if (amountMatch) {\n    r.new_amount = Number(amountMatch[1]);\n  }\n\n  return { json: r };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3840,
+        2192
+      ],
+      "id": "a2c941f1-6427-49a8-a6c6-d638159e7173",
+      "name": "Prepare Invoice Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$json||{}; const valid=!!(d.invoice_id&&d.supplier_id&&d.amount); const amount=Number(d.amount||0); return [{json:{...d,validation_status:valid?'Valid':'Missing required data',approval_status:valid?(amount>1000?'Pending Manager Approval':'Auto Approved'):'Invalid',needs_manager_approval:valid&&amount>1000}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4736,
+        2736
+      ],
+      "id": "f6fbfafc-20f2-4915-bcf3-f505220c0333",
+      "name": "Validate Invoice"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "3lWlOHWA5Eg21KAV",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/3lWlOHWA5Eg21KAV",
+          "cachedResultName": "WF-08 Audit Logging"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "user_id": "={{ $json.user_id || \"system\" }}",
+            "user_name": "={{ $json.user_name || \"\" }}",
+            "role": "={{ $json.role || \"\" }}",
+            "action": "={{ $json.audit_action || $json.request_action || \"process\" }}",
+            "status": "={{ $json.audit_status || $json.validation_status || \"success\" }}",
+            "intent": "invoice",
+            "entity_type": "Invoice",
+            "entity_id": "={{ $json.invoice_id || \"\" }}",
+            "details": "={{ $json.reply || $json.validation_status || \"\" }}",
+            "reply": "={{ $json.reply || \"\" }}",
+            "invoice_id": "={{ $json.invoice_id || \"\" }}",
+            "amount": "={{ $json.amount || \"\" }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        5408,
+        2736
+      ],
+      "id": "4dbb1ecc-e314-4bb2-a449-7aec41c79026",
+      "name": "Call WF-08 Audit Logging"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "approval-check",
+              "leftValue": "={{ $json.needs_manager_approval === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        5632,
+        2736
+      ],
+      "id": "2fad324f-f35e-4015-8e4e-6e591b594837",
+      "name": "Needs Manager Approval?"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "DDJ5sZEMlXY14ein",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/DDJ5sZEMlXY14ein",
+          "cachedResultName": "WF-02 Approval Management"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chat_id": "={{ $json.chat_id }}",
+            "request": "={{ $json.request }}",
+            "user_id": "={{ $json.user_id }}",
+            "user_name": "={{ $json.user_name }}",
+            "role": "={{ $json.role }}",
+            "status": "={{ $json.status }}",
+            "intent": "invoice",
+            "action": "process",
+            "entity_type": "Invoice",
+            "entity_id": "={{ $json.invoice_id }}",
+            "invoice_id": "={{ $json.invoice_id }}",
+            "invoice_number": "={{ $json.invoice_number }}",
+            "supplier_id": "={{ $json.supplier_id }}",
+            "amount": "={{ $json.amount }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        5856,
+        2640
+      ],
+      "id": "c83d6d4d-cc25-4461-b282-f0ec049d8a31",
+      "name": "Call WF-02 Approval Management"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst d = $json || {};\n\nlet updated = {};\n\ntry {\n  updated = $('Find Invoice To Update').first().json || {};\n} catch (e) {\n  updated = {};\n}\n\n// 1. منع رسالة النجاح إذا كانت الفاتورة موجودة بالفعل\nif (\n  d.result_type === 'invoice_duplicate' ||\n  d.duplicate === true\n) {\n  const invoiceId =\n    d.invoice_id ||\n    d.requested_invoice_id ||\n    'غير محدد';\n\n  return [{\n    json: {\n      ...d,\n      reply: `⚠️ الفاتورة ${invoiceId} موجودة بالفعل، لم تتم إضافتها مرة أخرى.`,\n      result_type: 'invoice_duplicate',\n      audit_action: 'add',\n      audit_status: 'failed'\n    }\n  }];\n}\n\n// 2. معالجة أخطاء إضافة الفاتورة\nif (d.add_error === true || d.result_type === 'invoice_add_error') {\n  return [{\n    json: {\n      ...d,\n      reply: d.reply ||\n        '⚠️ تعذرت إضافة الفاتورة. تأكد من رقم الفاتورة والمورد والمبلغ.',\n      result_type: 'invoice_add_error',\n      audit_action: 'add',\n      audit_status: 'failed'\n    }\n  }];\n}\n\n// 3. معالجة الفاتورة غير الموجودة عند التعديل\nif (d.not_found === true || updated.not_found === true) {\n  return [{\n    json: {\n      ...d,\n      reply: d.reply ||\n        updated.reply ||\n        '⚠️ لم يتم العثور على الفاتورة.',\n      result_type: 'invoice_not_found'\n    }\n  }];\n}\n\n// 4. معالجة تعديل الفاتورة\nconst action = String(\n  d.request_action ||\n  d.action ||\n  updated.request_action ||\n  updated.action ||\n  ''\n).toLowerCase();\n\nif (\n  action === 'update' ||\n  updated.request_action === 'update' ||\n  updated.new_amount !== undefined\n) {\n  const invoiceId =\n    updated.invoice_number ||\n    updated.invoice_id ||\n    d.invoice_number ||\n    d.invoice_id ||\n    updated.requested_invoice_id ||\n    d.requested_invoice_id ||\n    'غير محدد';\n\n  const amount =\n    updated.new_amount ??\n    d.new_amount ??\n    d.amount ??\n    'غير محدد';\n\n  return [{\n    json: {\n      ...d,\n      reply: `✅ تم تعديل الفاتورة ${invoiceId} بنجاح.\\n💰 المبلغ الجديد: ${amount}`,\n      result_type: 'invoice_update',\n      audit_action: 'update',\n      audit_status: 'success'\n    }\n  }];\n}\n\n// 5. معالجة نجاح إضافة الفاتورة\nif (\n  action === 'add' ||\n  d.result_type === 'invoice_add'\n) {\n  const invoiceId =\n    d.invoice_id ||\n    d.requested_invoice_id ||\n    'غير محدد';\n\n  const amount =\n    d.amount ??\n    d.new_amount ??\n    'غير محدد';\n\n  return [{\n    json: {\n      ...d,\n      reply: `✅ تمت إضافة الفاتورة ${invoiceId} بنجاح.\\n💰 المبلغ: ${amount}`,\n      result_type: 'invoice_add',\n      audit_action: 'add',\n      audit_status: 'success'\n    }\n  }];\n}\n\n// 6. عرض الفواتير\nconst rows = Array.isArray(d.invoices)\n  ? d.invoices\n  : [d];\n\nconst validRows = rows.filter(\n  r => r.invoice_id || r.invoice_number\n);\n\nreturn [{\n  json: {\n    ...d,\n    reply: validRows.length\n      ? `📋 الفواتير:\\n${validRows.map(r =>\n          `رقم الفاتورة: ${r.invoice_number || r.invoice_id} | المبلغ: ${r.amount ?? '-'} | الحالة: ${r.approval_status || r.status || '-'}`\n        ).join('\\n')}`\n      : '📋 لا توجد فواتير.',\n    result_type: 'invoice_view'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6080,
+        2256
+      ],
+      "id": "706c193d-b2a2-444f-85c3-78fd4baf014f",
+      "name": "Return Invoice Result"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.request_action }}",
+              "rightValue": "view",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "id": "ffbcda06-f940-49bd-a33a-c4b3127bf1c3"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4064,
+        2192
+      ],
+      "id": "d87581c5-56e6-4398-8c75-6e4661a52db4",
+      "name": "Invoice View Request?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.request_action }}",
+              "rightValue": "update",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4288,
+        2288
+      ],
+      "id": "2e136a98-df8d-405f-96c4-46925b3425ed",
+      "name": "Invoice Update Request?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.validation_status }}",
+              "rightValue": "Valid",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4960,
+        2736
+      ],
+      "id": "f6b2ec4d-4f4e-4bd1-91a8-677ea3644dee",
+      "name": "Invoice Valid?"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst prep = $('Prepare Invoice Request').first().json || {};\nconst request = String(prep.request || '').trim();\nconst requestedId = String(prep.requested_invoice_id || '').trim();\n\nconst amountMatch =\n  request.match(/(?:المبلغ|مبلغها|مبلغ|amount)\\s*(?:إلى|الى|يساوي|بمقدار|=|:)?\\s*(\\d+(?:\\.\\d+)?)/i);\n\nif (!requestedId) {\n  return [{\n    json: {\n      ...prep,\n      not_found: true,\n      reply: '⚠️ لم يتم تحديد رقم الفاتورة المطلوب تعديلها.',\n      audit_action: 'update',\n      audit_status: 'failed'\n    }\n  }];\n}\n\nif (!amountMatch) {\n  return [{\n    json: {\n      ...prep,\n      not_found: true,\n      reply: '⚠️ لم يتم تحديد المبلغ الجديد.',\n      audit_action: 'update',\n      audit_status: 'failed'\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    ...prep,\n    requested_invoice_id: requestedId,\n    new_amount: Number(amountMatch[1]),\n    not_found: false,\n    audit_action: 'update',\n    audit_status: 'pending'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5184,
+        1808
+      ],
+      "id": "c8c51679-122d-4eed-a040-58f8d7415ccd",
+      "name": "Prepare Invoice Update"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1558027212,
+          "mode": "list",
+          "cachedResultName": "Invoices"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "invoice_id": "={{ $json.invoice_id }}",
+            "supplier_id": "={{ $json.supplier_id }}",
+            "invoice_number": "={{ $json.invoice_number }}",
+            "amount": "={{ $json.new_amount ?? $json.amount }}",
+            "date": "={{ $json.date }}",
+            "status": "={{ $json.new_invoice_status || $json.status }}",
+            "approval_status": "={{ $json.new_approval_status || $json.approval_status }}"
+          },
+          "matchingColumns": [
+            "invoice_id"
+          ],
+          "schema": [
+            {
+              "id": "invoice_id",
+              "displayName": "invoice_id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "supplier_id",
+              "displayName": "supplier_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "invoice_number",
+              "displayName": "invoice_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "amount",
+              "displayName": "amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "approval_status",
+              "displayName": "approval_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        5856,
+        1872
+      ],
+      "id": "0ccf35f0-ea91-4d5d-a10e-f4d9d1437b10",
+      "name": "Update Invoice Status",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1558027212,
+          "mode": "list",
+          "cachedResultName": "Invoices"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "invoice_id": "={{ $json.invoice_id }}",
+            "supplier_id": "={{ $json.supplier_id }}",
+            "invoice_number": "={{ $json.invoice_number }}",
+            "amount": "={{ $json.amount }}",
+            "date": "={{ $json.date }}",
+            "status": "Approved",
+            "approval_status": "Auto Approved"
+          },
+          "matchingColumns": [
+            "invoice_id"
+          ],
+          "schema": [
+            {
+              "id": "invoice_id",
+              "displayName": "invoice_id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "supplier_id",
+              "displayName": "supplier_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "invoice_number",
+              "displayName": "invoice_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "amount",
+              "displayName": "amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "approval_status",
+              "displayName": "approval_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        5856,
+        2832
+      ],
+      "id": "3ab2167e-d4a2-419f-a3b0-e55876bef187",
+      "name": "Auto Approve Invoice",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$json; return [{json:{...d,reply:'⚠️ لا يمكن معالجة الفاتورة لأن البيانات المطلوبة ناقصة.',result_type:'invoice',audit_action:'process',audit_status:'failed'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5184,
+        2640
+      ],
+      "id": "a7f40ac2-47d4-424a-b8c2-4b628a7abd17",
+      "name": "Format Invalid Invoice"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst prep = $('Prepare Invoice Update').first().json || {};\nconst rows = $('Get Invoices').all().map(item => item.json || {});\nconst requestedId = String(prep.requested_invoice_id || '').trim().toLowerCase();\n\nconst found = rows.find(row =>\n  String(row.invoice_id || '').trim().toLowerCase() === requestedId ||\n  String(row.invoice_number || '').trim().toLowerCase() === requestedId\n);\n\nif (!found) {\n  return [{\n    json: {\n      ...prep,\n      not_found: true,\n      reply: `⚠️ الفاتورة ${prep.requested_invoice_id} غير موجودة. لم يتم إجراء أي تعديل.`,\n      audit_action: 'update',\n      audit_status: 'failed'\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    ...found,\n    ...prep,\n    invoice_id: found.invoice_id,\n    supplier_id: found.supplier_id,\n    invoice_number: found.invoice_number,\n    amount: found.amount,\n    date: found.date,\n    status: found.status,\n    approval_status: found.approval_status,\n    new_amount: prep.new_amount,\n    not_found: false\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5408,
+        1808
+      ],
+      "id": "e58e7f13-cfb9-4484-b306-026e81678b9a",
+      "name": "Find Invoice To Update"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.not_found }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        5632,
+        1808
+      ],
+      "id": "450399f5-b15e-41e8-ba71-fcdeae6778e9",
+      "name": "Invoice Update Found?"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst rows = $input.all().map(x => x.json || {});\nconst prep = $('Prepare Invoice Request').first().json || {};\n\nconst requestedId = String(\n  prep.requested_invoice_id || ''\n).trim().toLowerCase();\n\nconst filteredRows = requestedId\n  ? rows.filter(r => {\n      const id = String(r.invoice_number || r.invoice_id || '')\n        .trim()\n        .toLowerCase();\n\n      return id === requestedId;\n    })\n  : rows;\n\nlet reply;\n\nif (filteredRows.length) {\n  reply = requestedId\n    ? `📋 تفاصيل الفاتورة:\\n${filteredRows.map(r =>\n        `رقم الفاتورة: ${r.invoice_number || r.invoice_id || '-'} | المبلغ: ${r.amount ?? '-'} | الحالة: ${r.approval_status || r.status || '-'}`\n      ).join('\\n')}`\n    : `📋 الفواتير:\\n${filteredRows.map(r =>\n        `رقم الفاتورة: ${r.invoice_number || r.invoice_id || '-'} | المبلغ: ${r.amount ?? '-'} | الحالة: ${r.approval_status || r.status || '-'}`\n      ).join('\\n')}`;\n} else {\n  reply = requestedId\n    ? `⚠️ لم يتم العثور على الفاتورة بالرقم ${prep.requested_invoice_id || prep.invoice_id}.`\n    : '📋 لا توجد فواتير.';\n}\n\nreturn [{\n  json: {\n    ...prep,\n    reply,\n    invoices: filteredRows,\n    result_type: 'invoice_view',\n    audit_action: 'view',\n    audit_status: requestedId && !filteredRows.length ? 'not_found' : 'success'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4288,
+        1632
+      ],
+      "id": "89de39b2-c8a6-4bc5-a5d3-61db4ecad8c9",
+      "name": "Format Invoice View Result"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "3lWlOHWA5Eg21KAV",
+          "mode": "list",
+          "cachedResultName": "WF-08 Audit Logging"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "user_id": "={{ $json.user_id || \"system\" }}",
+            "user_name": "={{ $json.user_name || \"\" }}",
+            "role": "={{ $json.role || \"\" }}",
+            "action": "view",
+            "status": "success",
+            "intent": "invoice",
+            "entity_type": "Invoice",
+            "entity_id": "",
+            "details": "={{ $json.reply || \"\" }}",
+            "reply": "={{ $json.reply || \"\" }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        4512,
+        1632
+      ],
+      "id": "588c3dda-339e-460d-9968-b74c5580ec56",
+      "name": "Audit Invoice View"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json:$json}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4736,
+        1632
+      ],
+      "id": "3af94adf-56d0-43af-ba88-70462be74f14",
+      "name": "Return Invoice View"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "96459c67-4949-4ccd-af73-70647ed1fa76",
+              "leftValue": "={{ $json.request_action }}",
+              "rightValue": "add",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        4512,
+        2448
+      ],
+      "id": "29150ab8-ae35-4fc3-883e-971c38f9fd75",
+      "name": "Invoice Add Request?"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst prep = $('Prepare Invoice Request').first().json || {};\nconst rows = $('Get Invoices').all().map(item => item.json || {});\n\nconst invoiceId = String(\n  prep.requested_invoice_id || ''\n).trim().toLowerCase();\n\nconst supplierId = String(\n  prep.requested_supplier_id || ''\n).trim();\n\nconst amount = Number(prep.new_amount);\n\nif (!invoiceId || !supplierId || !Number.isFinite(amount) || amount <= 0) {\n  return [{\n    json: {\n      ...prep,\n      invoice_id: invoiceId,\n      supplier_id: supplierId,\n      amount,\n      duplicate: false,\n      add_error: true,\n      reply: '⚠️ تعذرت إضافة الفاتورة. تأكد من رقم الفاتورة والمورد والمبلغ.'\n    }\n  }];\n}\n\nconst existingInvoices = rows\n  .map(row => String(row.invoice_id || '').trim().toLowerCase())\n  .filter(Boolean);\n\nconst duplicate = existingInvoices.includes(invoiceId);\n\nreturn [{\n  json: {\n    ...prep,\n    invoice_id: String(prep.requested_invoice_id).trim(),\n    supplier_id: supplierId,\n    amount,\n    duplicate,\n    add_error: false,\n    existing_invoice_ids: existingInvoices\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4960,
+        2256
+      ],
+      "id": "8808e413-5b5d-4bed-b0dc-93329dfdeee7",
+      "name": "Check Duplicate Invoice"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "5a0382c0-655c-41ad-a343-d2aa04d01e4c",
+              "leftValue": "={{ $json.duplicate }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        5408,
+        2352
+      ],
+      "id": "a62801d1-6e6d-4020-92c8-909acb85398b",
+      "name": "Invoice Already Exists?"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1558027212,
+          "mode": "list",
+          "cachedResultName": "Invoices",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg/edit#gid=1558027212"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "invoice_id": "={{ $json.invoice_id }}",
+            "supplier_id": "={{ $json.supplier_id }}",
+            "amount": "={{ $json.amount }}",
+            "date": "={{ $now.toISODate() }}",
+            "status": "Active",
+            "approval_status": "Pending"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "invoice_id",
+              "displayName": "invoice_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "supplier_id",
+              "displayName": "supplier_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "invoice_number",
+              "displayName": "invoice_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "amount",
+              "displayName": "amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "approval_status",
+              "displayName": "approval_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        5632,
+        2448
+      ],
+      "id": "05740d4d-c12a-4237-b787-29b603ed48fe",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst d = $json || {};\n\nconst invoiceId =\n  d.invoice_id ||\n  d.requested_invoice_id ||\n  '';\n\nreturn [{\n  json: {\n    ...d,\n    request_action: 'add',\n    result_type: 'invoice_duplicate',\n    audit_action: 'add',\n    audit_status: 'failed',\n    reply: `⚠️ الفاتورة ${invoiceId} موجودة بالفعل، لم تتم إضافتها مرة أخرى.`\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5856,
+        2256
+      ],
+      "id": "1f9c598c-984b-4163-aa7b-96faeeb1cfcc",
+      "name": "Format Duplicate Invoice"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "8bcb8b54-7de3-471c-a4ea-c3c0d785b6fa",
+              "leftValue": "={{ $json.add_error }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        5184,
+        2256
+      ],
+      "id": "af8bcb1a-92b8-4f3b-ba4f-64b31f94c057",
+      "name": "Invoice Add Data Valid?"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst request = $('Prepare Invoice Request').first().json || {};\nconst added = $json || {};\n\nreturn [{\n  json: {\n    ...request,\n    ...added,\n    invoice_id: request.requested_invoice_id,\n    supplier_id: request.requested_supplier_id,\n    amount: request.new_amount,\n    date: added.date || new Date().toISOString().slice(0, 10),\n    status: 'Active',\n    approval_status: 'Pending',\n    request_action: 'add',\n    result_type: 'invoice_add',\n    audit_action: 'add',\n    audit_status: 'success',\n    reply: `✅ تمت إضافة الفاتورة ${request.requested_invoice_id} بنجاح.\\n💰 المبلغ: ${request.new_amount}\\n📅 التاريخ: ${new Date().toISOString().slice(0, 10)}\\n📌 الحالة: Active\\n🕓 الموافقة: Pending`\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5856,
+        2448
+      ],
+      "id": "08d2be28-b144-43a5-9a2b-4951c7b915d7",
+      "name": "Format Added Invoice"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst d = $json || {};\n\nreturn [{\n  json: {\n    ...d,\n    result_type: 'invoice_add_error',\n    audit_action: 'add',\n    audit_status: 'failed',\n    reply: d.reply || '⚠️ تعذرت إضافة الفاتورة. تأكد من رقم الفاتورة ورقم المورد والمبلغ، وأن المبلغ أكبر من صفر.'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5856,
+        2064
+      ],
+      "id": "5cd4ccfe-c459-441b-986a-934f35cd25c7",
+      "name": "Format Invalid Add"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Get Invoices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Invoices": {
+      "main": [
+        [
+          {
+            "node": "Prepare Invoice Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Invoice Request": {
+      "main": [
+        [
+          {
+            "node": "Invoice View Request?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Invoice": {
+      "main": [
+        [
+          {
+            "node": "Invoice Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call WF-08 Audit Logging": {
+      "main": [
+        [
+          {
+            "node": "Needs Manager Approval?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs Manager Approval?": {
+      "main": [
+        [
+          {
+            "node": "Call WF-02 Approval Management",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Auto Approve Invoice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call WF-02 Approval Management": {
+      "main": [
+        [
+          {
+            "node": "Return Invoice Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Invoice View Request?": {
+      "main": [
+        [
+          {
+            "node": "Format Invoice View Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invoice Update Request?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Invoice Update Request?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Invoice Update",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invoice Add Request?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Invoice Update": {
+      "main": [
+        [
+          {
+            "node": "Find Invoice To Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Invoice Status": {
+      "main": [
+        [
+          {
+            "node": "Return Invoice Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Invoice Valid?": {
+      "main": [
+        [
+          {
+            "node": "Call WF-08 Audit Logging",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Invalid Invoice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Invalid Invoice": {
+      "main": [
+        [
+          {
+            "node": "Call WF-08 Audit Logging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto Approve Invoice": {
+      "main": [
+        [
+          {
+            "node": "Return Invoice Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Invoice To Update": {
+      "main": [
+        [
+          {
+            "node": "Invoice Update Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Invoice Update Found?": {
+      "main": [
+        [
+          {
+            "node": "Return Invoice Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Invoice Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Invoice View Result": {
+      "main": [
+        [
+          {
+            "node": "Audit Invoice View",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audit Invoice View": {
+      "main": [
+        [
+          {
+            "node": "Return Invoice View",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Invoice Add Request?": {
+      "main": [
+        [
+          {
+            "node": "Check Duplicate Invoice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validate Invoice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Duplicate Invoice": {
+      "main": [
+        [
+          {
+            "node": "Invoice Add Data Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Invoice Already Exists?": {
+      "main": [
+        [
+          {
+            "node": "Format Duplicate Invoice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Duplicate Invoice": {
+      "main": [
+        [
+          {
+            "node": "Return Invoice Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Invoice Add Data Valid?": {
+      "main": [
+        [
+          {
+            "node": "Format Invalid Add",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invoice Already Exists?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Format Added Invoice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Added Invoice": {
+      "main": [
+        [
+          {
+            "node": "Return Invoice Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Invalid Add": {
+      "main": [
+        [
+          {
+            "node": "Return Invoice Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "4gRXNAKnlMatvg6L",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "828ebb63-2fed-476b-86f1-edca7e49612a",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "nodeGroups": [],
+  "id": "fXbyl6sZLPzbJa9N",
+  "tags": []
+}

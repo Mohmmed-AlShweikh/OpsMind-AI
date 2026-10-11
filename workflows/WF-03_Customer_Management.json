@@ -1,0 +1,1387 @@
+{
+  "name": "WF-03 Customer Management",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const d=$json; return [{json:{...d,reply:d.reply,result_type:'customer_add',audit_action:'add',audit_status:'failed'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        22960,
+        14432
+      ],
+      "id": "4f5e66f9-8230-4da4-9699-ed4ef0a078d5",
+      "name": "Format Duplicate Result"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "DDJ5sZEMlXY14ein",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/DDJ5sZEMlXY14ein",
+          "cachedResultName": "WF-02 Approval Management"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chat_id": "={{ $json.chat_id }}",
+            "user_id": "={{ $json.user_id }}",
+            "user_name": "={{ $json.user_name }}",
+            "role": "={{ $json.role }}",
+            "action": "delete",
+            "entity_type": "Customer",
+            "entity_id": "={{ $json.customer_id }}",
+            "customer_id": "={{ $json.customer_id }}",
+            "customer_name": "={{ $json.name }}",
+            "requester_chat_id": "={{ $json.chat_id }}",
+            "request": "={{ $json.request }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        22960,
+        14656
+      ],
+      "id": "d7e6e8a2-1354-4e67-b833-23ac65435c7d",
+      "name": "Call WF-02 Approval Management"
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        22960,
+        13280
+      ],
+      "id": "59533a4f-5965-4bf1-a7d3-ff7aa7342673",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst input = $json || {};\n\nconst normalizeId = (value) =>\n  String(value ?? '').trim().toUpperCase();\n\nconst clean = (value) => {\n  if (value === undefined || value === null) return undefined;\n  const result = String(value).trim();\n  return result || undefined;\n};\n\n// Read the original request, including structured input if provided.\nlet request = input.request ?? '';\nlet parsedRequest = {};\n\nif (typeof request === 'object' && request !== null) {\n  parsedRequest = request;\n  request = '';\n} else {\n  request = String(request);\n  try {\n    const parsed = JSON.parse(request);\n    if (parsed && typeof parsed === 'object') {\n      parsedRequest = parsed;\n    }\n  } catch {}\n}\n\nlet aiData = input.data ?? {};\nif (typeof aiData === 'string') {\n  try {\n    aiData = JSON.parse(aiData);\n  } catch {\n    aiData = {};\n  }\n}\nif (!aiData || typeof aiData !== 'object' || Array.isArray(aiData)) {\n  aiData = {};\n}\n\nconst source = {\n  ...input,\n  ...parsedRequest,\n  ...aiData,\n};\n\nconst text = String(request).trim();\n\nconst get = (...keys) => {\n  for (const key of keys) {\n    const value = source[key];\n    if (value !== undefined && value !== null &&\n        String(value).trim() !== '') {\n      return value;\n    }\n  }\n  return undefined;\n};\n\n// Extract values from labels such as:\n// الاسم: أحمد\n// Customer Name: Ahmad\n// رقم التلفون: 0590000000\nfunction labeledValue(labels) {\n  const label = labels.join('|');\n  const re = new RegExp(\n    '(?:^|\\\\n|[,;|])\\\\s*(?:' + label +\n    ')\\\\s*[:=：-]\\\\s*([^\\\\n,;|]+)',\n    'i'\n  );\n  return text.match(re)?.[1]?.trim();\n}\n\nlet action = String(source.action || '').trim().toLowerCase();\n\nif (!['view', 'add', 'update', 'delete'].includes(action)) {\n  if (/\\b(add|create)\\b|إضافة|اضافة|أضف|اضف|ضيف|سجّل|سجل|أنشئ|انشئ/i.test(text)) {\n    action = 'add';\n  } else if (/\\b(update|edit|change)\\b|تعديل|عدّل|عدل|غيّر|غير|حدّث|حدث|زبط|ظبط/i.test(text)) {\n    action = 'update';\n  } else if (/\\b(delete|remove)\\b|احذف|حذف|امسح|مسح|شيل/i.test(text)) {\n    action = 'delete';\n  } else {\n    action = 'view';\n  }\n}\n\nlet customer_id = get('customer_id', 'customerId', 'id');\nlet name = get('name', 'customer_name', 'customerName');\nlet email = get('email', 'e_mail');\nlet phone = get('phone', 'phone_number', 'phoneNumber', 'mobile');\nlet status = get('status');\nlet notes = get('notes', 'note');\n\n// Extract common Arabic and English field labels.\nname = name || labeledValue([\n  'name', 'customer\\\\s*name', 'الاسم',\n  'اسم\\\\s*العميل', 'اسم\\\\s*الزبون', 'اسم\\\\s*الزبون'\n]);\n\nemail = email || labeledValue([\n  'email', 'e-mail', 'البريد\\\\s*الإلكتروني',\n  'البريد\\\\s*الالكتروني', 'الإيميل', 'الايميل',\n  'ايميل', 'إيميل'\n]);\n\nphone = phone || labeledValue([\n  'phone', 'phone\\\\s*number', 'mobile',\n  'رقم\\\\s*الهاتف', 'رقم\\\\s*التلفون',\n  'الهاتف', 'التلفون', 'الجوال', 'رقم\\\\s*الجوال'\n]);\n\nstatus = status || labeledValue([\n  'status', 'الحالة'\n]);\n\nnotes = notes || labeledValue([\n  'notes?', 'ملاحظات', 'التفاصيل\\\\s*الإضافية'\n]);\n\n// Extract email and phone if labels were omitted.\nemail = email || text.match(\n  /[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/i\n)?.[0];\n\nif (!phone) {\n  phone = text.match(\n    /(?:\\+?\\d[\\d ()-]{6,}\\d)/\n  )?.[0]?.trim();\n}\n\n// Extract customer IDs without case sensitivity.\nif (!customer_id) {\n  customer_id = text.match(\n    /(?:customer\\s*(?:id|number|no)?|رقم\\s*العميل|العميل\\s*(?:رقم\\s*)?|معرّف\\s*العميل|معرف\\s*العميل)\\s*[:=#-]?\\s*(C\\d+|[A-Z]+\\d+|\\d+)/i\n  )?.[1];\n}\n\nif (!customer_id) {\n  customer_id = text.match(/\\b(C\\d+)\\b/i)?.[1];\n}\n\n// Support comma-separated add requests as well.\nif (action === 'add') {\n  const rest = text.replace(\n    /^\\s*(?:add|create|أضف|اضف|ضيف|إضافة|اضافة|أنشئ|انشئ)\\s*,?\\s*(?:customer|عميل|زبون)?\\s*,?\\s*/i,\n    ''\n  ).trim();\n\n  const values = rest.split(',').map(v => v.trim()).filter(Boolean);\n\n  // Use positional parsing only when no labeled fields were found.\n  if (!name && !email && !phone && values.length >= 3) {\n    name = values[0];\n    phone = values[1];\n    email = values[2];\n    status = status || values[3];\n    notes = notes || values.slice(4).join(', ');\n  }\n\n  // Customer IDs are generated by the workflow during creation.\n  customer_id = undefined;\n}\n\n// Support natural update requests.\nif (action === 'update') {\n  const updateId = text.match(\n    /(?:customer\\s*(?:id|number)?|العميل\\s*(?:رقم\\s*)?|رقم\\s*العميل)\\s*[:=#-]?\\s*(C\\d+|[A-Z]+\\d+|\\d+)/i\n  )?.[1];\n\n  customer_id = customer_id || updateId;\n\n  name = name || text.match(\n    /(?:اسمه|اسمها|الاسم|اسم\\s*العميل|name)\\s*[:=]?\\s*([^,\\n;|]+)/i\n  )?.[1]?.trim();\n\n  phone = phone || text.match(\n    /(?:هاتفه|هاتفها|رقم\\s*الهاتف|رقم\\s*التلفون|جواله|جوالها|phone)\\s*[:=]?\\s*(\\+?\\d[\\d ()-]{6,}\\d)/i\n  )?.[1]?.trim();\n\n  email = email || text.match(\n    /(?:إيميله|ايميله|بريده|البريد\\s*الإلكتروني|الإيميل|الايميل|email)\\s*[:=]?\\s*([A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,})/i\n  )?.[1]?.trim();\n}\n\nreturn [{\n  json: {\n    ...input,\n    action,\n    customer_id: customer_id ? normalizeId(customer_id) : undefined,\n    name: clean(name),\n    email: clean(email),\n    phone: clean(phone),\n    status: clean(status),\n    notes: clean(notes),\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        23184,
+        13280
+      ],
+      "id": "b97d9eb2-3605-43ca-b1a9-070d84b49993",
+      "name": "Prepare Customer Action"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "view",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "view"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "add",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "add"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "update",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "update"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "delete",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "delete"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "ignoreCase": true
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        23408,
+        13232
+      ],
+      "id": "3a5fbd0a-542e-4463-b757-96f58484a3c3",
+      "name": "Switch Customer Action"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1635465681,
+          "mode": "list",
+          "cachedResultName": "Customers",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg/edit#gid=1635465681"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        24976,
+        12512
+      ],
+      "id": "8b07c192-a075-4cce-a8b8-c5180e44cac5",
+      "name": "Get Data",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(x => x.json);\n\nconst lines = rows\n  .map(r =>\n    Object.entries(r)\n      .filter(([k]) => k !== 'row_number')\n      .map(([k, v]) => `${k}: ${v}`)\n      .join(' | ')\n  )\n  .join('\\n');\n\nconst original = $('Prepare Customer Action').first().json;\n\n// IDs of all displayed customers\nconst entityIds = rows\n  .map(r => String(r.customer_id || '').trim())\n  .filter(Boolean)\n  .join(', ');\n\nreturn [{\n  json: {\n    ...original,\n    reply: rows.length\n      ? `👥 العملاء:\\n${lines}`\n      : 'لا توجد بيانات في العملاء.',\n    result_type: 'customer_view',\n    audit_action: 'view',\n    audit_status: 'success',\n    entity_id: entityIds\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        25200,
+        12512
+      ],
+      "id": "9528d269-0f53-4eb6-8803-0697e219e1b1",
+      "name": "Format View Result"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$json||{};\nconst missing=[];\nif(!d.name) missing.push('name');\nif(!d.phone) missing.push('phone');\nif(!d.email) missing.push('email');\nif(missing.length){\n  return [{json:{...d,reply:`⚠️ لا يمكن إضافة العميل لأن البيانات التالية ناقصة: ${missing.join('، ')}.\\nالمطلوب: name + phone + email.\\nstatus و notes اختياريان.`,result_type:'customer_add',audit_action:'add',audit_status:'failed'}}];\n}\nreturn [{json:{...d,customer_id:undefined,name:String(d.name).trim(),phone:String(d.phone).trim(),email:String(d.email).trim().toLowerCase(),status:String(d.status||'Active').trim(),notes:String(d.notes||'').trim()}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        23632,
+        12832
+      ],
+      "id": "5edcc312-f920-4705-9512-0ae6bd775733",
+      "name": "Prepare Customer Add"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1635465681,
+          "mode": "list",
+          "cachedResultName": "Customers",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg/edit#gid=1635465681"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "customer_id": "={{ $json.customer_id }}",
+            "name": "={{ $json.name }}",
+            "phone": "={{ $json.phone }}",
+            "email": "={{ $json.email }}",
+            "status": "={{ $json.status || 'Active' }}",
+            "notes": "={{ $json.notes || '' }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "customer_id",
+              "displayName": "customer_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        24752,
+        12800
+      ],
+      "id": "5b11f90b-46f5-4b32-ad82-41e31adb1778",
+      "name": "Add Customer",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$('Find Duplicate Customer').first()?.json||$('Prepare Customer Add').first()?.json||{};\nreturn [{json:{...d,reply:`✅ تمام، تمت إضافة العميل بنجاح.\\nرقم العميل: ${d.customer_id}\\nالاسم: ${d.name}`,result_type:'customer_add',audit_action:'add',audit_status:'success'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        24976,
+        12800
+      ],
+      "id": "88b14f41-a61a-4a1d-a39d-eac843b7cd00",
+      "name": "Format Add Result"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1635465681,
+          "mode": "list",
+          "cachedResultName": "Customers",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg/edit#gid=1635465681"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        23856,
+        13280
+      ],
+      "id": "588227bf-5014-47dd-b8fd-3a65afb15698",
+      "name": "Get Customers For Update",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst input = $('Prepare Customer Action').first()?.json || {};\nconst rows = $input.all().map(item => item.json || {});\n\nconst normalizeId = value =>\n  String(value ?? '').trim().toLowerCase();\n\nconst targetId = normalizeId(input.customer_id);\n\nif (!targetId) {\n  return [{\n    json: {\n      ...input,\n      not_found: true,\n      reply: '⚠️ أرسل رقم العميل الذي تريد تعديله.',\n      result_type: 'customer_update',\n      audit_action: 'update',\n      audit_status: 'failed'\n    }\n  }];\n}\n\nconst found = rows.find(row =>\n  normalizeId(row.customer_id) === targetId\n);\n\nif (!found) {\n  return [{\n    json: {\n      ...input,\n      not_found: true,\n      reply: `⚠️ العميل ${input.customer_id} غير موجود، ولم يتم إجراء أي تعديل.`,\n      result_type: 'customer_update',\n      audit_action: 'update',\n      audit_status: 'failed'\n    }\n  }];\n}\n\nconst fields = ['name', 'phone', 'email', 'status', 'notes'];\n\nconst changed = fields.filter(key =>\n  input[key] !== undefined &&\n  input[key] !== null &&\n  String(input[key]).trim() !== ''\n);\n\nif (!changed.length) {\n  return [{\n    json: {\n      ...input,\n      ...found,\n      customer_id: found.customer_id,\n      not_found: false,\n      missing_update_fields: true,\n      reply: '⚠️ العميل موجود، لكن لم تحدد البيانات التي تريد تعديلها.',\n      result_type: 'customer_update',\n      audit_action: 'update',\n      audit_status: 'failed'\n    }\n  }];\n}\n\nconst updateData = {\n  ...input,\n  ...found,\n  customer_id: found.customer_id,\n  not_found: false,\n  missing_update_fields: false\n};\n\n// Keep only fields explicitly supplied for the update.\nfor (const key of fields) {\n  if (\n    input[key] !== undefined &&\n    input[key] !== null &&\n    String(input[key]).trim() !== ''\n  ) {\n    updateData[key] = input[key];\n  }\n}\n\nreturn [{ json: updateData }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        24080,
+        13280
+      ],
+      "id": "520ba580-bca3-4ec2-9932-f3dd8bd55c2f",
+      "name": "Find Customer To Update"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1635465681,
+          "mode": "list",
+          "cachedResultName": "Customers",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg/edit#gid=1635465681"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "customer_id": "={{ $json.customer_id }}",
+            "name": "={{ $json.name }}",
+            "phone": "={{ $json.phone }}",
+            "email": "={{ $json.email }}",
+            "status": "={{ $json.status || 'Active' }}",
+            "notes": "={{ $json.notes || '' }}"
+          },
+          "matchingColumns": [
+            "customer_id"
+          ],
+          "schema": [
+            {
+              "id": "customer_id",
+              "displayName": "customer_id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        24752,
+        13408
+      ],
+      "id": "9a981bb1-c352-4911-9baa-6129e6c932d5",
+      "name": "Update Customer",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$json; return [{json:{...d,reply:`✅ تم تحديث العميل ${d.customer_id||''} بنجاح.`,result_type:'customer_update',audit_action:'update',audit_status:'success'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        25200,
+        13408
+      ],
+      "id": "ed9fa661-c953-494f-a1a5-274313dd3395",
+      "name": "Format Update Result"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json:{...$json,reply:$json.reply||'⚠️ لم يتم تحديث العميل.',result_type:'customer_update',audit_action:'update',audit_status:$json.audit_status||'failed'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        24752,
+        13184
+      ],
+      "id": "35f4d3f8-a6fd-4452-ba36-5b8660902205",
+      "name": "Format Update Not Found"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1635465681,
+          "mode": "list",
+          "cachedResultName": "Customers",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg/edit#gid=1635465681"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        24528,
+        13696
+      ],
+      "id": "5a89a03e-ae8f-4dd5-bf54-372232ce6d43",
+      "name": "Get Customers For Delete",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const input=$('Prepare Customer Action').first().json||{};\nconst rows=$input.all().map(x=>x.json||{});\nconst targetId=String(input.customer_id||'').trim().toLowerCase();\nconst targetName=String(input.name||'').trim().toLowerCase();\nif(!targetId&&!targetName)return [{json:{...input,not_found:true,reply:'⚠️ للحذف أرسل رقم العميل أو اسمه.',result_type:'customer_delete',audit_action:'delete',audit_status:'failed'}}];\nconst found=rows.find(r=>{\n const id=String(r.customer_id??'').trim().toLowerCase();\n const name=String(r.name??'').trim().toLowerCase();\n return (targetId&&id===targetId)||(targetName&&name===targetName);\n});\nif(!found)return [{json:{...input,not_found:true,reply:'⚠️ لم يتم العثور على العميل المطلوب للحذف.',result_type:'customer_delete',audit_action:'delete',audit_status:'failed'}}];\nreturn [{json:{...input,...found,customer_id:String(found.customer_id||input.customer_id||'').trim().toUpperCase(),customer_name:String(found.name||input.name||'').trim(),row_number:found.row_number,not_found:false}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        24752,
+        13696
+      ],
+      "id": "00863271-9ae3-4544-a1a2-33a67d8b85a9",
+      "name": "Find Customer To Delete"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json:{...$json,reply:$json.reply||'⚠️ لم يتم العثور على العميل المطلوب للحذف.',result_type:'customer_delete',audit_action:'delete',audit_status:'failed'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        25200,
+        13600
+      ],
+      "id": "bc9a66c9-a0b0-451b-9cba-ffe9e3f5a7f2",
+      "name": "Format Delete Not Found"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json:{...$json,reply:$json.reply||'⚠️ العملية غير مدعومة. استخدم view أو add أو update أو delete.',result_type:'customer',audit_action:$json.action||'unknown',audit_status:$json.audit_status||'failed'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        25200,
+        13984
+      ],
+      "id": "5636da97-8f8b-4012-8d65-2fc25ccc4017",
+      "name": "Unsupported Customer Action"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "3lWlOHWA5Eg21KAV",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/3lWlOHWA5Eg21KAV",
+          "cachedResultName": "WF-08 Audit Logging"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "user_id": "={{ $json.user_id || \"system\" }}",
+            "user_name": "={{ $json.user_name || \"\" }}",
+            "role": "={{ $json.role || \"\" }}",
+            "action": "={{ $json.audit_action || $json.action || \"operation\" }}",
+            "status": "={{ $json.audit_status || \"success\" }}",
+            "intent": "customer",
+            "entity_type": "Customer",
+            "entity_id": "={ $json.customer_id || $json.entity_id || \"\" }",
+            "details": "={{ $json.reply || \"\" }}",
+            "reply": "={{ $json.reply || \"\" }}",
+            "result_type": "={{ $json.result_type || \"\" }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        25424,
+        13120
+      ],
+      "id": "57f5ee4f-9506-47ca-944e-1781271e2073",
+      "name": "Call WF-08 Audit Logging"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.audit_status }}",
+              "rightValue": "failed",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              },
+              "id": "fc98c883-097f-41ec-ad1e-484da2a27da2"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        23856,
+        12832
+      ],
+      "id": "a044e717-f7b2-478c-bcab-dd4c6ccceb4f",
+      "name": "Customer Add Valid?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x = $('Find Customer To Update').first()?.json || {};\nconst f = x.found_customer || {};\nconst has = (v) => v !== undefined && v !== null && String(v).trim() !== '';\nreturn [{json:{\n  ...x,\n  customer_id: has(x.customer_id) ? String(x.customer_id).trim() : String(f.customer_id || '').trim(),\n  name: has(x.name) ? String(x.name).trim() : String(f.name || '').trim(),\n  phone: has(x.phone) ? String(x.phone).trim() : String(f.phone || '').trim(),\n  email: has(x.email) ? String(x.email).trim() : String(f.email || '').trim(),\n  status: has(x.status) ? String(x.status).trim() : String(f.status || 'Active').trim(),\n  notes: has(x.notes) ? String(x.notes).trim() : String(f.notes || '').trim()\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        24976,
+        13408
+      ],
+      "id": "cd482425-ebb3-4d7a-b159-112bdf8d4eb3",
+      "name": "Prepare Customer Update Data"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1635465681,
+          "mode": "list",
+          "cachedResultName": "Customers"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        24080,
+        12896
+      ],
+      "id": "5ad073da-92bc-4dc8-a6d3-cb41d08a43c6",
+      "name": "Get Customers For Add",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst d = $('Prepare Customer Add').first()?.json || {};\nconst rows = $input.all().map(item => item.json || {});\n\nconst normalizeEmail = v => String(v ?? '').trim().toLowerCase();\nconst normalizePhone = v =>\n  String(v ?? '').replace(/\\D/g, '').replace(/^0+/, '');\n\nconst inputEmail = normalizeEmail(d.email);\nconst inputPhone = normalizePhone(d.phone);\n\nconst existing = rows.find(r =>\n  (inputEmail && normalizeEmail(r.email) === inputEmail) ||\n  (inputPhone && normalizePhone(r.phone) === inputPhone)\n);\n\nif (existing) {\n  const emailExists = inputEmail !== '' &&\n    normalizeEmail(existing.email) === inputEmail;\n\n  const phoneExists = inputPhone !== '' &&\n    normalizePhone(existing.phone) === inputPhone;\n\n  const reasons = [];\n  if (emailExists) reasons.push('البريد الإلكتروني');\n  if (phoneExists) reasons.push('رقم الهاتف');\n\n  return [{\n    json: {\n      ...d,\n      duplicate: true,\n      reply: `⚠️ لم تتم إضافة العميل لأن ${reasons.join(' و ')} مستخدم مسبقًا.\\nالعميل الموجود: ${existing.customer_id || '-'} - ${existing.name || '-'}.`,\n      result_type: 'customer_add',\n      audit_action: 'add',\n      audit_status: 'failed'\n    }\n  }];\n}\n\nconst ids = rows.map(r =>\n  Number(String(r.customer_id ?? '').match(/^C(\\d+)$/i)?.[1] || 0)\n);\n\nreturn [{\n  json: {\n    ...d,\n    duplicate: false,\n    customer_id: `C${String(Math.max(0, ...ids) + 1).padStart(3, '0')}`,\n    name: String(d.name ?? '').trim(),\n    phone: String(d.phone ?? '').trim(),\n    email: inputEmail,\n    status: String(d.status || 'Active').trim(),\n    notes: String(d.notes || '').trim()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        24304,
+        12896
+      ],
+      "id": "bd4412ad-930d-4a0b-8827-848527e1991e",
+      "name": "Find Duplicate Customer"
+    },
+    {
+      "parameters": {
+        "sendTo": "manager@example.com",
+        "subject": "OpsMind AI | تمت إضافة Customer جديد",
+        "message": "={{ `<!DOCTYPE html><html><body style=\"margin:0;background:#f4f7fb;font-family:Arial,sans-serif;color:#1f2937\"><div style=\"max-width:640px;margin:30px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 6px 24px rgba(0,0,0,.08)\"><div style=\"background:#0f766e;color:#fff;padding:24px\"><h2 style=\"margin:0\">OpsMind AI</h2><p style=\"margin:8px 0 0\">تمت إضافة Customer جديد بنجاح</p></div><div style=\"padding:24px\"><p>تم تنفيذ العملية بنجاح في نظام OpsMind AI.</p><table style=\"width:100%;border-collapse:collapse\"><tr><td style=\"padding:10px;border-bottom:1px solid #eee;font-weight:bold\">الرقم</td><td style=\"padding:10px;border-bottom:1px solid #eee\">${$json['customer_id'] || '-'}</td></tr><tr><td style=\"padding:10px;border-bottom:1px solid #eee;font-weight:bold\">الاسم</td><td style=\"padding:10px;border-bottom:1px solid #eee\">${$json.name || '-'}</td></tr><tr><td style=\"padding:10px;font-weight:bold\">التاريخ</td><td style=\"padding:10px\">${new Date().toLocaleString('ar-EG')}</td></tr></table><p style=\"margin-top:24px;color:#6b7280\">هذه رسالة آلية من OpsMind AI.</p></div></div></body></html>` }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        25200,
+        12800
+      ],
+      "id": "0d6e31e6-f9da-46e6-baf3-702c0c0ab93f",
+      "name": "Send Add Customer Email",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Gmail account 4"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$json; return [{json:{...d,reply:d.reply,result_type:'customer_add',audit_action:'add',audit_status:'failed'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        25200,
+        12992
+      ],
+      "id": "111fb873-73b4-4856-bf72-d424395cbd5c",
+      "name": "Format Duplicate Result1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.missing_update_fields }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "isTrue"
+              },
+              "id": "bcc39c08-3422-4b83-aae5-9ac8867a0706"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        24528,
+        13360
+      ],
+      "id": "49ae3fdf-8d72-46bd-81b6-5e728330f680",
+      "name": "Update Fields Provided?1"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "DDJ5sZEMlXY14ein",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/DDJ5sZEMlXY14ein",
+          "cachedResultName": "WF-02 Approval Management"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chat_id": "={{ $json.chat_id }}",
+            "user_id": "={{ $json.user_id }}",
+            "user_name": "={{ $json.user_name }}",
+            "role": "={{ $json.role }}",
+            "action": "delete",
+            "entity_type": "Customer",
+            "entity_id": "={{ $json.customer_id }}",
+            "customer_id": "={{ $json.customer_id }}",
+            "customer_name": "={{ $json.name }}",
+            "request": "={{ $json.request }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        25200,
+        13792
+      ],
+      "id": "c89f1808-bf29-4f77-baa8-45e95a4c8cc3",
+      "name": "Call WF-02 Approval Management1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "2189841b-4394-4543-87c5-a6ca81afb441",
+              "leftValue": "={{ $json.not_found }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        24976,
+        13696
+      ],
+      "id": "68311dec-7ee8-4d8f-aaf5-082e008d9ab4",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.missing_update_fields }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "isTrue"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        22960,
+        14208
+      ],
+      "id": "8fbb2928-64d3-4e76-ac46-c714f20436b9",
+      "name": "Update Fields Provided?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "dce8d675-b254-4807-9990-2bbdd8903ec3",
+              "leftValue": "={{ $json.not_found }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        24304,
+        13280
+      ],
+      "id": "40d0619b-cc43-4530-be13-35a01a50475d",
+      "name": "Update Target Found?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "0974d09e-8339-4860-a81c-2b21c1c41ab1",
+              "leftValue": "={{ $json.duplicate }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        24528,
+        12896
+      ],
+      "id": "6669a98a-bb43-4972-9231-cef822fc8705",
+      "name": "Duplicate Customer?"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Format Duplicate Result": {
+      "main": [
+        []
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Prepare Customer Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Customer Action": {
+      "main": [
+        [
+          {
+            "node": "Switch Customer Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch Customer Action": {
+      "main": [
+        [
+          {
+            "node": "Get Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Customer Add",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Customers For Update",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Customers For Delete",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unsupported Customer Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Data": {
+      "main": [
+        [
+          {
+            "node": "Format View Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format View Result": {
+      "main": [
+        [
+          {
+            "node": "Call WF-08 Audit Logging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Customer Add": {
+      "main": [
+        [
+          {
+            "node": "Customer Add Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Customer": {
+      "main": [
+        [
+          {
+            "node": "Format Add Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Add Result": {
+      "main": [
+        [
+          {
+            "node": "Send Add Customer Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Customers For Update": {
+      "main": [
+        [
+          {
+            "node": "Find Customer To Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Customer To Update": {
+      "main": [
+        [
+          {
+            "node": "Update Target Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Customer": {
+      "main": [
+        [
+          {
+            "node": "Prepare Customer Update Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Update Result": {
+      "main": [
+        [
+          {
+            "node": "Call WF-08 Audit Logging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Update Not Found": {
+      "main": [
+        [
+          {
+            "node": "Call WF-08 Audit Logging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Customers For Delete": {
+      "main": [
+        [
+          {
+            "node": "Find Customer To Delete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Customer To Delete": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Delete Not Found": {
+      "main": [
+        [
+          {
+            "node": "Call WF-08 Audit Logging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unsupported Customer Action": {
+      "main": [
+        [
+          {
+            "node": "Call WF-08 Audit Logging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Customer Add Valid?": {
+      "main": [
+        [
+          {
+            "node": "Get Customers For Add",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call WF-08 Audit Logging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Customer Update Data": {
+      "main": [
+        [
+          {
+            "node": "Format Update Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Customers For Add": {
+      "main": [
+        [
+          {
+            "node": "Find Duplicate Customer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Duplicate Customer": {
+      "main": [
+        [
+          {
+            "node": "Duplicate Customer?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Add Customer Email": {
+      "main": [
+        [
+          {
+            "node": "Call WF-08 Audit Logging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Duplicate Result1": {
+      "main": [
+        [
+          {
+            "node": "Call WF-08 Audit Logging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Fields Provided?1": {
+      "main": [
+        [
+          {
+            "node": "Format Update Not Found",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Customer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Format Delete Not Found",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call WF-02 Approval Management1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Target Found?": {
+      "main": [
+        [
+          {
+            "node": "Format Update Not Found",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Fields Provided?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Duplicate Customer?": {
+      "main": [
+        [
+          {
+            "node": "Format Duplicate Result1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Add Customer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "4gRXNAKnlMatvg6L",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "e8c66aee-b768-453b-8f0d-b1541e825e8e",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "nodeGroups": [],
+  "id": "DJsT1O4BWkX2X4cW",
+  "tags": []
+}

@@ -1,0 +1,1230 @@
+{
+  "name": "WF-00 Telegram Router",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message",
+          "callback_query"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.5,
+      "position": [
+        480,
+        3568
+      ],
+      "id": "8de32378-3dc0-4484-a249-de1a5b306f9f",
+      "name": "Telegram Trigger",
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Telegram account 18"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Users",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": []
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        704,
+        3568
+      ],
+      "id": "e7ad3d6a-85c2-445e-a11b-ad2e6c9b515e",
+      "name": "Get User",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Prepare Request').first().json.request }}",
+        "options": {
+          "systemMessage": "You are OpsMind AI, a multilingual business assistant.\n\nYour job is to understand business requests written in:\n\n* Arabic, including Palestinian dialect and informal Arabic.\n* English, regardless of uppercase or lowercase letters.\n* Mixed Arabic and English in the same message.\n* Different wordings, synonyms, spelling variations, and informal expressions.\n\nReturn ONLY valid JSON using this exact structure:\n{\n\"intent\": \"invoice|customer|order|ticket|product|report|approval|unknown\",\n\"action\": \"view|add|update|delete|approve|reject|process|unknown\",\n\"data\": {},\n\"reply\": \"short reply\"\n}\n\nLANGUAGE UNDERSTANDING:\n\n* Understand Arabic and English descriptions of the same business action.\n* Examples of view: اعرض، ورجيني، بدي أشوف، جيبلي، show, list, get.\n* Examples of add: أضف، ضيف، بدي أضيف، سجّل، أنشئ، add, create.\n* Examples of update: عدّل، غيّر، حدّث، زبّط بيانات، update, edit, change.\n* Examples of delete: احذف، امسح، شيل، بدي أتخلص من، delete, remove.\n* Understand synonyms for customers, orders, tickets, invoices, products, reports, and approvals.\n* Use the surrounding message to resolve the intended action. If it remains genuinely ambiguous, ask for clarification rather than guessing.\n\nFIELD EXTRACTION:\nMap field labels and their synonyms to consistent English keys:\n\n* name: الاسم، اسم العميل، اسم الزبون، اسم التذكرة، Name, Customer Name.\n* email: البريد الإلكتروني، الإيميل، الإيميل الإلكتروني، Email, E-mail.\n* phone: الهاتف، رقم الهاتف، رقم التلفون، الجوال، Phone, Mobile.\n* status: الحالة، Status.\n* notes: ملاحظات، تفاصيل إضافية، Notes.\n* customer_id: رقم العميل، معرّف العميل، Customer ID.\n* order_id: رقم الطلب، Order ID.\n* ticket_id: رقم التذكرة، Ticket ID.\n* invoice_id: رقم الفاتورة، Invoice ID.\n* product_id: رقم المنتج، Product ID.\n\nRULES:\n\n1. Extract only values explicitly supplied or clearly identified in the user's message.\n2. Preserve names, email addresses, phone numbers, IDs, amounts, and other values as supplied. Do not translate or invent their values.\n3. Treat IDs as case-insensitive identifiers for understanding and matching purposes, but do not assume an ID exists. The business workflow must verify it against the database.\n4. Normalize field names to the English keys listed above, even when the user writes the labels in Arabic.\n5. If a field is missing, omit it from data. Never invent missing values.\n6. Put extracted values in the data object. Use consistent keys such as name, email, phone, status, notes, customer_id, order_id, ticket_id, invoice_id, and product_id.\n7. Do not claim that a record was added, updated, deleted, found, or approved. Only the business workflow can confirm the actual result.\n8. A delete request is not an approval decision. Use action \"delete\" when the user asks to delete a record. Use \"approve\" or \"reject\" only when the user is explicitly making an approval decision.\n9. If the request is genuinely unclear, use intent \"unknown\", action \"unknown\", and reply exactly: الرسالة غير واضحة، يرجى تحديد طلبك.\n10. Respect the user's permissions and never attempt to bypass role-based access control.\n\nEXAMPLES:\n\nUser: ضيف زبون اسمه أحمد ورقم تلفونه 0591234567 وإيميله [ahmad@example.com](mailto:ahmad@example.com)\nOutput:\n{\"intent\":\"customer\",\"action\":\"add\",\"data\":{\"name\":\"أحمد\",\"phone\":\"0591234567\",\"email\":\"[ahmad@example.com](mailto:ahmad@example.com)\"},\"reply\":\"\"}\n\nUser: Add customer Name: Test Customer Email: [test.customer@example.com](mailto:test.customer@example.com) Phone: 0590000000\nOutput:\n{\"intent\":\"customer\",\"action\":\"add\",\"data\":{\"name\":\"Test Customer\",\"email\":\"[test.customer@example.com](mailto:test.customer@example.com)\",\"phone\":\"0590000000\"},\"reply\":\"\"}\n\nUser: احذف t01\nOutput:\n{\"intent\":\"ticket\",\"action\":\"delete\",\"data\":{\"ticket_id\":\"t01\"},\"reply\":\"\"}\n\nUser: SHOW CUSTOMER c003\nOutput:\n{\"intent\":\"customer\",\"action\":\"view\",\"data\":{\"customer_id\":\"c003\"},\"reply\":\"\"}\n\nUser: عدّل حالة الطلب O12 إلى مكتمل\nOutput:\n{\"intent\":\"order\",\"action\":\"update\",\"data\":{\"order_id\":\"O12\",\"status\":\"مكتمل\"},\"reply\":\"\"}\n\n\nTICKET FIELD EXTRACTION RULES:\n\nWhen the user creates or updates a support ticket, extract these fields separately into the data object:\n\n* customer_id: Customer identifier, including labels such as \"رقم العميل\", \"معرّف العميل\", \"Customer ID\".\n* subject: Ticket title or subject, including \"الموضوع\", \"موضوع التذكرة\", \"عنوان التذكرة\", \"Subject\", \"Title\".\n* description: Ticket details, including \"الوصف\", \"تفاصيل التذكرة\", \"Description\", \"Details\".\n* status: Ticket status, including \"الحالة\", \"حالة التذكرة\", \"Status\".\n\nNever combine subject and description into notes. Never put a subject value into notes. If the user explicitly provides a subject, return it as data.subject.\n\nExample input:\nأضف تذكرة جديدة:\nرقم العميل: C003\nالموضوع: مشكلة في الفاتورة\nالوصف: العميل يواجه مشكلة في دفع الفاتورة\nالحالة: Open\n\nExpected JSON:\n{\"intent\":\"ticket\",\"action\":\"add\",\"data\":{\"customer_id\":\"C003\",\"subject\":\"مشكلة في الفاتورة\",\"description\":\"العميل يواجه مشكلة في دفع الفاتورة\",\"status\":\"Open\"},\"reply\":\"\"}\n\n### Support Tickets Intent and Mode\n\nDistinguish between two different ticket-related requests:\n\n**A. General support issue / complaint**\n\nWhen a user reports a problem, difficulty, delay, or issue with orders, invoices, customers, or any business process, classify it as a support ticket request.\n\nExamples:\n\n* \"عندي مشكلة في الطلبات مش ملحق عليها\"\n* \"في مشكلة في الطلبات\"\n* \"الطلبات متأخرة\"\n* \"مش قادر أتابع الطلبات\"\n* \"عندي مشكلة في فاتورة\"\n* \"النظام مش شغال\"\n\nFor these messages:\n\n1. Set `\"intent\": \"ticket\"` and `\"action\": \"add\"`.\n2. Set `\"data.ticket_mode\": \"complaint\"`.\n3. Extract `subject` and `description` from the user's actual message without inventing facts.\n4. If the affected business area is clear, use it to formulate a concise subject.\n5. Preserve the user's original problem as the description.\n6. Do not ask the user for `customer_id` solely because it is missing from a general complaint.\n7. If the message does not provide enough information to understand the actual problem, ask one specific follow-up question instead of creating an incomplete ticket.\n8. Use the Support Tickets tool/workflow when available. Confirm creation only after the workflow reports success.\n\nExample:\nUser: عندي مشكلة في الطلبات مش ملحق عليها\n\nExpected JSON:\n{\"intent\":\"ticket\",\"action\":\"add\",\"data\":{\"ticket_mode\":\"complaint\",\"subject\":\"صعوبة في متابعة الطلبات\",\"description\":\"المستخدم يواجه صعوبة في متابعة الطلبات بسبب كثرتها أو عدم قدرته على اللحاق بها\"},\"reply\":\"\"}\n\nImportant: The subject may summarize the issue, but the description must not introduce unsupported details. A safer description for the same example is: \"المستخدم يذكر أنه يواجه صعوبة في متابعة الطلبات ولا يستطيع اللحاق بها.\"\n\n**B. Explicit manual ticket creation**\n\nWhen a user explicitly asks to add or create a ticket and is providing ticket fields, or requests a ticket for a specific customer, treat it as manual ticket creation.\n\nExamples:\n\n* \"أضف تذكرة\"\n* \"أضف تذكرة للعميل C003\"\n* \"أنشئ تذكرة موضوعها مشكلة في الفاتورة\"\n* \"Add a support ticket for customer C003\"\n\nFor these messages:\n\n1. Set `\"intent\": \"ticket\"` and `\"action\": \"add\"`.\n2. Set `\"data.ticket_mode\": \"manual\"`.\n3. Extract only the fields explicitly supplied by the user.\n4. Do not invent `customer_id`, `subject`, or `description`.\n5. The required fields for manual ticket creation remain `customer_id`, `subject`, and `description`.\n6. If any required field is missing, do not claim that the ticket was created. Ask the user specifically for the missing field or fields.\n7. Do not call the ticket-creation operation until all required fields are available.\n8. Do not weaken or bypass the workflow's existing validation rules.\n9. If the message contains more than one separate business request (different actions or different records), do NOT process any of them. Return intent \"unknown\", action \"unknown\", and reply exactly: يرجى تحديد مهمة واحدة فقط في كل رسالة.\n\nExamples:\nUser: اعرض العميل C001 وغيّر هاتفه إلى 0591234567\nOutput: {\"intent\":\"unknown\",\"action\":\"unknown\",\"data\":{},\"reply\":\"يرجى تحديد مهمة واحدة فقط في كل رسالة.\"}\n\nUser: أضف تذكرة للعميل C003 واحذف الطلب ORD001\nOutput: {\"intent\":\"unknown\",\"action\":\"unknown\",\"data\":{},\"reply\":\"يرجى تحديد مهمة واحدة فقط في كل رسالة.\"}\nExample:\nUser: أضف تذكرة للعميل C003\n\nExpected JSON:\n{\"intent\":\"ticket\",\"action\":\"add\",\"data\":{\"ticket_mode\":\"manual\",\"customer_id\":\"C003\"},\"reply\":\"يرجى تزويدي بموضوع التذكرة ووصف المشكلة قبل إضافتها.\"}\n\n**C. Existing ticket operations**\n\nFor viewing, updating, or deleting tickets, preserve the existing behavior and permissions. Do not classify these operations as new ticket creation unless the user explicitly requests a new ticket.\n\nNever confirm that a ticket was created, updated, or deleted until the corresponding workflow confirms success.\n\nKeep all other OpsMind AI intent handling, role-based access control, and business workflow validation unchanged.\n\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.8,
+      "position": [
+        2496,
+        3600
+      ],
+      "id": "091cc406-be41-4e3f-a56f-7a65701d4dcd",
+      "name": "AI Business Agent"
+    },
+    {
+      "parameters": {
+        "jsCode": "let raw = $json.output ?? $json.text ?? '';\nraw = String(raw).replace(/^```json\\s*/, '').replace(/```$/, '').trim();\n\nlet d;\ntry {\n  d = JSON.parse(raw);\n} catch (e) {\n  d = { intent: 'unknown', action: 'unknown', reply: 'الرسالة غير واضحة، يرجى تحديد طلبك.' };\n}\n\nconst base = $('Prepare Request').first().json || {};\nconst role = base.role;\n\nconst allowed = {\n  invoice: ['Manager', 'Admin', 'Employee'],\n  customer: ['Manager', 'Admin', 'Employee'],\n  order: ['Manager', 'Admin', 'Employee'],\n  ticket: ['Manager', 'Admin', 'Employee'],\n  product: ['Manager', 'Admin', 'Employee'],\n  report: ['Manager', 'Admin'],\n  approval: ['Manager', 'Admin']\n};\n\nconst actions = ['view', 'add', 'update', 'delete', 'approve', 'reject', 'process', 'unknown'];\n\nif (d.intent === 'unknown' || !allowed[d.intent]) {\n  // الـ AI لم يفهم الطلب أو رفضه: نحتفظ برده\n  d.intent = 'unknown';\n  d.action = 'unknown';\n  d.reply = d.reply || 'الرسالة غير واضحة، يرجى تحديد طلبك.';\n} else if (!allowed[d.intent].includes(role)) {\n  // نية معروفة لكن دور المستخدم لا يسمح\n  d.intent = 'unknown';\n  d.action = 'unknown';\n  d.reply = 'ليس لديك صلاحية لتنفيذ هذا الطلب.';\n}\n\nif (!actions.includes(d.action)) d.action = 'unknown';\n\nconst safeData = (d.data && typeof d.data === 'object') ? d.data : {};\n\nreturn [{\n  json: {\n    ...base,\n    ...safeData,\n    // حماية الهوية: لا يستطيع الـ AI تغيير هذه الحقول\n    user_id: base.user_id,\n    user_name: base.user_name,\n    role: base.role,\n    chat_id: base.chat_id,\n    telegram_id: base.telegram_id,\n    intent: d.intent || 'unknown',\n    action: d.action || 'unknown',\n    reply: d.reply || '',\n    data: safeData\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2848,
+        3600
+      ],
+      "id": "f12de1a5-93d6-4c68-b5c1-5aa09ecf4a68",
+      "name": "Parse AI Intent"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "invoice",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "0f3dc804-b57d-482c-8b33-b1ff3c5db435"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "WF-01 Invoice Processing"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "fd631354-2e9c-43e6-9d92-1ba16df06031",
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "approval",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "WF-02 Approval Management"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "c21d2bef-cbca-42ee-95c5-cb5f967489c4",
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "customer",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "WF-03 Customer Management"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "8f3b31ec-92c6-4d1e-8e78-e1258e682fc2",
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "order",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "WF-04 Order Management"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "58b51296-186d-4b36-9e1f-defd415b6a7b",
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "ticket",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "WF-05 Support Tickets"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "c8b075d3-e774-4b2d-b51b-bf4aef231706",
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "report",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "WF-06 Business Reports"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "product",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Product View"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        3072,
+        3504
+      ],
+      "id": "5da3fdf9-3224-4155-a95c-b31dcccec4ce",
+      "name": "Route Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json:{...$json,reply:$json.reply||'الرسالة غير واضحة، يرجى تحديد طلبك.',result_type:'unknown'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3744,
+        3504
+      ],
+      "id": "74ad53f8-a6e8-40b6-94c5-ef5596140560",
+      "name": "Unknown Request"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id || $('Telegram Trigger').first().json.callback_query?.message?.chat?.id || $('Telegram Trigger').first().json.message?.chat?.id }}",
+        "text": "={{ $json.reply || $json.output || $json.text || 'تم تنفيذ الطلب.' }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3968,
+        3712
+      ],
+      "id": "2fd7b808-276b-47c9-a5d7-c9d93f34481a",
+      "name": "Send Response",
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Telegram account 18"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "fXbyl6sZLPzbJa9N",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/fXbyl6sZLPzbJa9N",
+          "cachedResultName": "WF-01 Invoice Processing"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chat_id": "={{ $json.chat_id }}",
+            "request": "={{ $json.request }}",
+            "user_id": "={{ $json.user_id }}",
+            "user_name": "={{ $json.user_name }}",
+            "role": "={{ $json.role }}",
+            "status": "={{ $json.status }}",
+            "intent": "={{ $json.intent }}",
+            "action": "={{ $json.action }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        3744,
+        3120
+      ],
+      "id": "2cc50203-f03b-4ae2-82ba-eb805e45234d",
+      "name": "Call WF-01 Invoice Processing"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "DDJ5sZEMlXY14ein",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/DDJ5sZEMlXY14ein",
+          "cachedResultName": "WF-02 Approval Management"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chat_id": "={{ $json.chat_id }}",
+            "request": "={{ $json.request }}",
+            "user_id": "={{ $json.user_id }}",
+            "user_name": "={{ $json.user_name }}",
+            "role": "={{ $json.role }}",
+            "status": "={{ $json.status }}",
+            "intent": "={{ $json.intent }}",
+            "action": "={{ $json.action }}",
+            "approval_id": "={{ $json.approval_id || \"\" }}",
+            "callback_user_id": "={{ $json.callback_user_id || \"\" }}",
+            "is_callback": "={{ $json.is_callback || false }}",
+            "data": "={{ JSON.stringify($json.data || {}) }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        3296,
+        2944
+      ],
+      "id": "0f176ad9-33ff-486b-b454-dd74d118b746",
+      "name": "Call WF-02 Approval Management"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "DJsT1O4BWkX2X4cW",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/DJsT1O4BWkX2X4cW",
+          "cachedResultName": "WF-03 Customer Management"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chat_id": "={{ $json.chat_id }}",
+            "request": "={{ $json.request }}",
+            "user_id": "={{ $json.user_id }}",
+            "user_name": "={{ $json.user_name }}",
+            "role": "={{ $json.role }}",
+            "status": "={{ $json.status }}",
+            "intent": "={{ $json.intent }}",
+            "action": "={{ $json.action }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        3744,
+        3312
+      ],
+      "id": "660add50-96ea-4d45-9585-b88db7307ef2",
+      "name": "Call WF-03 Customer Management"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "aldryIxOkstIdwa6",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/aldryIxOkstIdwa6",
+          "cachedResultName": "WF-04 Order Management"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chat_id": "={{ $json.chat_id }}",
+            "request": "={{ $json.request }}",
+            "user_id": "={{ $json.user_id }}",
+            "user_name": "={{ $json.user_name }}",
+            "role": "={{ $json.role }}",
+            "status": "={{ $json.status }}",
+            "intent": "={{ $json.intent }}",
+            "action": "={{ $json.action }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        3744,
+        3888
+      ],
+      "id": "67e7c9d0-685c-4464-b573-1d4455d0fe16",
+      "name": "Call WF-04 Order Management"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "ZA1r2oik7I3LiDnR",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/ZA1r2oik7I3LiDnR",
+          "cachedResultName": "WF-05 Support Tickets"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chat_id": "={{ $json.chat_id }}",
+            "request": "={{ $json.request }}",
+            "user_id": "={{ $json.user_id }}",
+            "user_name": "={{ $json.user_name }}",
+            "role": "={{ $json.role }}",
+            "status": "={{ $json.status }}",
+            "intent": "={{ $json.intent }}",
+            "action": "={{ $json.action }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        3744,
+        4080
+      ],
+      "id": "ea3523a5-b657-41c5-ab8b-669ffe4f9014",
+      "name": "Call WF-05 Support Tickets"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "CX9kGhAvsYIAZi9h",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/CX9kGhAvsYIAZi9h",
+          "cachedResultName": "WF-06 Business Reports"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chat_id": "={{ $json.chat_id }}",
+            "request": "={{ $json.request }}",
+            "user_id": "={{ $json.user_id }}",
+            "user_name": "={{ $json.user_name }}",
+            "role": "={{ $json.role }}",
+            "status": "={{ $json.status }}",
+            "intent": "={{ $json.intent }}",
+            "action": "={{ $json.action }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        3744,
+        4272
+      ],
+      "id": "ce8c9ca2-e137-4eeb-ac16-49cde049a7a6",
+      "name": "Call WF-06 Business Reports"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.1-flash-lite",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        2512,
+        3824
+      ],
+      "id": "494b219a-dbaa-4927-a371-c48741976ec6",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Gemini(PaLM) Api account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows=$input.all().map(x=>x.json||{});\nconst u=$('Telegram Trigger').first().json||{};\nconst tgId=String(u.callback_query?.from?.id ?? u.message?.from?.id ?? '');\nconst user=rows.find(r=>String(r.telegram_id||'')===tgId);\nif(!user || String(user.status||'').toLowerCase()!=='active'){\n  return [{json:{authorized:false,reply:'⛔ غير مصرح لك باستخدام OpsMind AI أو أن حسابك غير مسجل في الشركة أو غير نشط.',chat_id:String(u.callback_query?.message?.chat?.id ?? u.message?.chat?.id ?? tgId)}}];\n}\nreturn [{json:{authorized:true,user_id:String(user.user_id||''),user_name:String(user.name||''),role:String(user.role||''),status:String(user.status||''),telegram_id:tgId,chat_id:String(u.callback_query?.message?.chat?.id ?? u.message?.chat?.id ?? tgId)}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        928,
+        3568
+      ],
+      "id": "244aa7c8-c061-436e-98e5-5b35795208c0",
+      "name": "Authenticate User"
+    },
+    {
+      "parameters": {
+        "jsCode": "const u=$('Telegram Trigger').first().json||{}; const base=$json||{}; const cb=u.callback_query;\nif(cb){const parts=String(cb.data||'').split('|'); const action=parts[0]==='approve'?'approve':parts[0]==='reject'?'reject':'unknown'; return [{json:{...base,request:'',intent:'approval',action,approval_id:parts[1]||'',callback_query_id:String(cb.id||''),callback_user_id:String(cb.from?.id||''),is_callback:true,is_start:false,chat_id:String(cb.message?.chat?.id||base.chat_id||'')}}];}\nconst request=String(u.message?.text||'').trim(); return [{json:{...base,request,is_callback:false,is_start:/^(\\/start|start)$/i.test(request),callback_user_id:'',chat_id:String(u.message?.chat?.id||base.chat_id||'')}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1376,
+        3216
+      ],
+      "id": "2e216843-cc0e-47ba-8ab0-e58272c11507",
+      "name": "Prepare Request"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e43db755-4588-4e0d-a89c-15d7fdc38243",
+              "leftValue": "={{ $json.is_callback }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2272,
+        3312
+      ],
+      "id": "17d45703-eb74-481e-898e-1cbdd78de9b3",
+      "name": "Callback Request?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "9d4e1390-40f3-499a-9471-b34ba5698036",
+              "leftValue": "={{ String($json.is_start) }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2048,
+        3216
+      ],
+      "id": "348babae-dd4e-4cc2-957b-2901a0b87e50",
+      "name": "Start Request?"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "👋 أهلاً بك في OpsMind AI\n\nاختر الخدمة التي تريدها من القائمة أدناه، ويمكنك أيضًا كتابة طلبك بشكل طبيعي.\n\n⚠️ إذا واجهت أي مشكلة يمكنك التواصل مع مالك البوت: @YOUR_USERNAME",
+        "replyMarkup": "replyKeyboard",
+        "replyKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "📄 عرض الفواتير",
+                    "additionalFields": {}
+                  },
+                  {
+                    "text": "📦 عرض الطلبات",
+                    "additionalFields": {}
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🎫 عرض التذاكر",
+                    "additionalFields": {}
+                  },
+                  {
+                    "text": "🛍️ عرض المنتجات",
+                    "additionalFields": {}
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "replyKeyboardOptions": {
+          "resize_keyboard": true,
+          "one_time_keyboard": false
+        },
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2272,
+        3120
+      ],
+      "id": "c79b868c-7101-4d9c-afdb-ab5d11e4aabc",
+      "name": "Send Start Menu",
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Telegram account 18"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Products",
+          "mode": "name",
+          "cachedResultName": "Products"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3296,
+        3696
+      ],
+      "id": "cdb60d0e-5baa-46e7-a420-d97792e24ca7",
+      "name": "Get Products For Menu",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(x => x.json);\n\nconst lines = rows\n  .map(r =>\n    Object.entries(r)\n      .filter(([k]) => k !== 'row_number')\n      .map(([k, v]) => `${k}: ${v}`)\n      .join(' | ')\n  )\n  .join('\\n');\n\nconst original = $('Prepare Request').first().json;\n\n// IDs of all displayed products\nconst entityIds = rows\n  .map(r => String(r.product_id || '').trim())\n  .filter(Boolean)\n  .join(', ');\n\nreturn [{\n  json: {\n    ...original,\n    reply: rows.length\n      ? `🛍️ المنتجات:\\n${lines}`\n      : 'لا توجد بيانات في المنتجات.',\n    result_type: 'product_view',\n    audit_action: 'view',\n    audit_status: 'success',\n    entity_id: entityIds\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3520,
+        3696
+      ],
+      "id": "7ec5ffa2-5703-47d0-b8ad-7ee95ea2707f",
+      "name": "Format Product View"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "3lWlOHWA5Eg21KAV",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/3lWlOHWA5Eg21KAV",
+          "cachedResultName": "WF-08 Audit Logging"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        3744,
+        3696
+      ],
+      "id": "0412b8e5-91a1-4d1b-8a59-c271c12a1cb3",
+      "name": "Audit Product View"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "=  {{ $('Prepare Request').first().json.chat_id }}",
+        "contextWindowLength": 3
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        2640,
+        3824
+      ],
+      "id": "fc4b16d8-9197-49fb-ad9d-99bfd74a1a60",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "operation": "sendChatAction",
+        "chatId": "={{ $json.chat_id }}"
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1600,
+        3216
+      ],
+      "id": "2ead9bce-0e46-44fc-b899-db54c63b6bba",
+      "name": "Send a chat action",
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Telegram account 18"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "   return [{ json: $('Prepare Request').first().json }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1824,
+        3216
+      ],
+      "id": "56225abc-b244-4343-bb60-8dca56d76657",
+      "name": "Restore Request"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c45518bc-0a8d-4819-9d20-1f6fb6ae77dc",
+              "leftValue": "={{ String($json.authorized) }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1152,
+        3568
+      ],
+      "id": "3a536ae6-fa4d-4be4-b281-9ecb0fb909b3",
+      "name": "Authorized"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get User": {
+      "main": [
+        [
+          {
+            "node": "Authenticate User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Request": {
+      "main": [
+        [
+          {
+            "node": "Send a chat action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Business Agent": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Intent": {
+      "main": [
+        [
+          {
+            "node": "Route Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Request": {
+      "main": [
+        [
+          {
+            "node": "Call WF-01 Invoice Processing",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call WF-02 Approval Management",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call WF-03 Customer Management",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call WF-04 Order Management",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call WF-05 Support Tickets",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call WF-06 Business Reports",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Products For Menu",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unknown Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unknown Request": {
+      "main": [
+        [
+          {
+            "node": "Send Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call WF-01 Invoice Processing": {
+      "main": [
+        [
+          {
+            "node": "Send Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call WF-02 Approval Management": {
+      "main": [
+        [
+          {
+            "node": "Send Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call WF-03 Customer Management": {
+      "main": [
+        [
+          {
+            "node": "Send Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call WF-04 Order Management": {
+      "main": [
+        [
+          {
+            "node": "Send Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call WF-05 Support Tickets": {
+      "main": [
+        [
+          {
+            "node": "Send Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call WF-06 Business Reports": {
+      "main": [
+        [
+          {
+            "node": "Send Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Business Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Authenticate User": {
+      "main": [
+        [
+          {
+            "node": "Authorized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Callback Request?": {
+      "main": [
+        [
+          {
+            "node": "Call WF-02 Approval Management",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Business Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start Request?": {
+      "main": [
+        [
+          {
+            "node": "Send Start Menu",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Callback Request?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Products For Menu": {
+      "main": [
+        [
+          {
+            "node": "Format Product View",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Product View": {
+      "main": [
+        [
+          {
+            "node": "Audit Product View",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audit Product View": {
+      "main": [
+        [
+          {
+            "node": "Send Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Business Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a chat action": {
+      "main": [
+        [
+          {
+            "node": "Restore Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Request": {
+      "main": [
+        [
+          {
+            "node": "Start Request?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Authorized": {
+      "main": [
+        [
+          {
+            "node": "Prepare Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "4gRXNAKnlMatvg6L",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "8cd9cb85-d4ca-4987-bb3d-1fb05602f2bb",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "nodeGroups": [],
+  "id": "mDyfHD7xaNymnBXO",
+  "tags": []
+}

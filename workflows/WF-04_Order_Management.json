@@ -1,0 +1,1171 @@
+{
+  "name": "WF-04 Order Management",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        1328,
+        2752
+      ],
+      "id": "d4cc0b3f-447f-4f24-9cb7-5710cced8e5f",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst input = $json || {};\n\n// ---------- Helpers ----------\nconst clean = (value) => {\n  if (value === undefined || value === null) return undefined;\n  const result = String(value).trim();\n  return result || undefined;\n};\n\nconst normalizeId = (value) => {\n  const result = clean(value);\n  return result ? result.toUpperCase() : undefined;\n};\n\n// ---------- Read request ----------\nlet request = input.request ?? '';\nlet parsedRequest = {};\n\nif (typeof request === 'object' && request !== null) {\n  parsedRequest = request;\n  request = '';\n} else {\n  request = String(request);\n\n  try {\n    const parsed = JSON.parse(request);\n    if (parsed && typeof parsed === 'object') {\n      parsedRequest = parsed;\n    }\n  } catch {}\n}\n\n// ---------- Read AI data ----------\nlet aiData = input.data ?? {};\n\nif (typeof aiData === 'string') {\n  try {\n    aiData = JSON.parse(aiData);\n  } catch {\n    aiData = {};\n  }\n}\n\nif (!aiData || typeof aiData !== 'object' || Array.isArray(aiData)) {\n  aiData = {};\n}\n\nconst source = {\n  ...input,\n  ...parsedRequest,\n  ...aiData,\n};\n\nconst text = String(request).trim();\n\nconst get = (...keys) => {\n  for (const key of keys) {\n    const value = source[key];\n    if (\n      value !== undefined &&\n      value !== null &&\n      String(value).trim() !== ''\n    ) {\n      return value;\n    }\n  }\n  return undefined;\n};\n\n// ---------- Extract labeled fields ----------\nfunction labeledValue(labels) {\n  const label = labels.join('|');\n\n  const re = new RegExp(\n    '(?:^|\\\\n|[,;|])\\\\s*(?:' + label +\n    ')\\\\s*[:=：-]\\\\s*([^\\\\n,;|]+)',\n    'i'\n  );\n\n  return text.match(re)?.[1]?.trim();\n}\n\n// ---------- Determine action ----------\nlet action = String(source.action || '').trim().toLowerCase();\n\nconst actionAliases = {\n  'عرض': 'view',\n  'اعرض': 'view',\n  'ورجيني': 'view',\n  'شوف': 'view',\n  'إضافة': 'add',\n  'اضافة': 'add',\n  'أضف': 'add',\n  'اضف': 'add',\n  'ضيف': 'add',\n  'أنشئ': 'add',\n  'انشئ': 'add',\n  'تعديل': 'update',\n  'عدل': 'update',\n  'عدّل': 'update',\n  'حدث': 'update',\n  'حدّث': 'update',\n  'غيّر': 'update',\n  'غير': 'update',\n  'زبط': 'update',\n  'ظبط': 'update',\n  'حذف': 'delete',\n  'احذف': 'delete',\n  'امسح': 'delete',\n  'شيل': 'delete',\n};\n\nif (actionAliases[action]) {\n  action = actionAliases[action];\n}\n\nif (!['view', 'add', 'update', 'delete'].includes(action)) {\n  if (/\\b(add|create)\\b|إضافة|اضافة|أضف|اضف|ضيف|أنشئ|انشئ/i.test(text)) {\n    action = 'add';\n  } else if (/\\b(update|edit|change|modify)\\b|تعديل|عدّل|عدل|حدّث|حدث|غيّر|غير|زبط|ظبط/i.test(text)) {\n    action = 'update';\n  } else if (/\\b(delete|remove|cancel)\\b|احذف|حذف|امسح|مسح|شيل|الغِ|إلغاء|الغاء/i.test(text)) {\n    action = 'delete';\n  } else {\n    action = 'view';\n  }\n}\n\n// ---------- Extract IDs ----------\nlet order_id = get('order_id', 'orderId', 'orderID');\nlet customer_id = get('customer_id', 'customerId', 'customerID');\nlet product_id = get('product_id', 'productId', 'productID');\n\norder_id = order_id || labeledValue([\n  'order\\\\s*(?:id|number|no\\\\.?|#)',\n  'رقم\\\\s*الطلب',\n  'معرّف\\\\s*الطلب',\n  'معرف\\\\s*الطلب'\n]);\n\ncustomer_id = customer_id || labeledValue([\n  'customer\\\\s*(?:id|number|no\\\\.?|#)',\n  'رقم\\\\s*العميل',\n  'معرّف\\\\s*العميل',\n  'معرف\\\\s*العميل'\n]);\n\nproduct_id = product_id || labeledValue([\n  'product\\\\s*(?:id|number|no\\\\.?|#)',\n  'رقم\\\\s*المنتج',\n  'معرّف\\\\s*المنتج',\n  'معرف\\\\s*المنتج'\n]);\n\nif (!order_id) {\n  order_id = text.match(/\\b(?:order\\s*)?(O\\d+)\\b/i)?.[1];\n}\n\nif (!customer_id) {\n  customer_id = text.match(/\\b(?:customer\\s*)?(C\\d+)\\b/i)?.[1];\n}\n\nif (!product_id) {\n  product_id = text.match(/\\b(?:product\\s*)?(P\\d+)\\b/i)?.[1];\n}\n\n// ---------- Extract order fields ----------\nlet quantity = get('quantity', 'qty', 'count');\nlet total_amount = get(\n  'total_amount',\n  'totalAmount',\n  'amount',\n  'total'\n);\nlet status = get('status');\n\nquantity = quantity ?? labeledValue([\n  'quantity',\n  'qty',\n  'order\\\\s*quantity',\n  'الكمية',\n  'كمية'\n]);\n\ntotal_amount = total_amount ?? labeledValue([\n  'total\\\\s*amount',\n  'total',\n  'amount',\n  'الإجمالي',\n  'الاجمالي',\n  'المبلغ\\\\s*الإجمالي',\n  'المبلغ',\n  'قيمة\\\\s*الطلب'\n]);\n\nstatus = status || labeledValue([\n  'status',\n  'order\\\\s*status',\n  'الحالة',\n  'حالة\\\\s*الطلب',\n  'حالة'\n]);\n\n// ---------- Natural-language update extraction ----------\nif (action === 'update') {\n  const idMatch = text.match(\n    /(?:order\\s*(?:id|number|no\\.?)?|الطلب\\s*(?:رقم\\s*)?|رقم\\s*الطلب)\\s*[:=#-]?\\s*(O\\d+|[A-Z]+\\d+|\\d+)/i\n  );\n\n  order_id = order_id || idMatch?.[1];\n\n  quantity = quantity ?? text.match(\n    /(?:quantity|qty|الكمية|كمية)\\s*[:=]?\\s*(\\d+(?:\\.\\d+)?)/i\n  )?.[1];\n\n  total_amount = total_amount ?? text.match(\n    /(?:total\\s*amount|amount|total|المبلغ|الإجمالي|الاجمالي|قيمة\\s*الطلب)\\s*[:=]?\\s*(\\d+(?:\\.\\d+)?)/i\n  )?.[1];\n\n  status = status || text.match(\n    /(?:حالة\\s*الطلب|الحالة|status)\\s*[:=]?\\s*([^,\\n;|]+)/i\n  )?.[1]?.trim();\n}\n\n// ---------- Normalize numeric fields ----------\nconst normalizeNumber = (value) => {\n  if (value === undefined || value === null || String(value).trim() === '') {\n    return undefined;\n  }\n\n  const number = Number(String(value).replace(/,/g, '').trim());\n  return Number.isFinite(number) ? number : value;\n};\n\n// ---------- Output ----------\nreturn [{\n  json: {\n    ...input,\n    action,\n    order_id: normalizeId(order_id),\n    customer_id: normalizeId(customer_id),\n    product_id: normalizeId(product_id),\n    quantity: normalizeNumber(quantity),\n    total_amount: normalizeNumber(total_amount),\n    status: clean(status),\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1552,
+        2752
+      ],
+      "id": "208c3fef-cd41-4325-8f5d-dbe5563dc4ad",
+      "name": "Prepare Order Action"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "view",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "view"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "add",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "add"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "update",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "update"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "delete",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "delete"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "ignoreCase": true
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1776,
+        2704
+      ],
+      "id": "a0f86686-3da0-447c-a4ba-3312d2ab9f93",
+      "name": "Switch Order Action"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 411613722,
+          "mode": "list",
+          "cachedResultName": "Orders",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg/edit#gid=411613722"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3120,
+        2080
+      ],
+      "id": "8797af48-7e29-4239-b6cf-0051e2a7f9cb",
+      "name": "Get Data",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(x => x.json);\n\nconst lines = rows\n  .map(r =>\n    Object.entries(r)\n      .filter(([k]) => k !== 'row_number')\n      .map(([k, v]) => `${k}: ${v}`)\n      .join(' | ')\n  )\n  .join('\\n');\n\nconst original = $('Prepare Order Action').first().json;\n\n// IDs of all displayed orders\nconst entityIds = rows\n  .map(r => String(r.order_id || '').trim())\n  .filter(Boolean)\n  .join(', ');\n\nreturn [{\n  json: {\n    ...original,\n    reply: rows.length\n      ? `📋 الطلبات:\\n${lines}`\n      : 'لا توجد بيانات في الطلبات.',\n    result_type: 'order_view',\n    audit_action: 'view',\n    audit_status: 'success',\n    entity_id: entityIds\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3344,
+        2080
+      ],
+      "id": "a71ec605-f9aa-42f3-8c63-151ce19c22fa",
+      "name": "Format View Result"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst d = $json || {};\n\nconst requiredFields = [\n  'customer_id',\n  'product_id',\n  'quantity',\n  'total_amount'\n];\n\nconst missing = requiredFields.filter(key =>\n  d[key] === undefined ||\n  d[key] === null ||\n  String(d[key]).trim() === ''\n);\n\nif (missing.length > 0) {\n  return [{\n    json: {\n      ...d,\n      missing_fields: true,\n      missing_field_names: missing,\n      reply: `⚠️ لا يمكن إضافة الطلب. البيانات الناقصة: ${missing.join('، ')}`,\n      result_type: 'order_add',\n      audit_action: 'add',\n      audit_status: 'failed'\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    ...d,\n    missing_fields: false,\n    status: String(d.status || 'Pending')\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        2368
+      ],
+      "id": "725103a5-c159-4847-9e71-0fcb58c70189",
+      "name": "Prepare Order Add"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 411613722,
+          "mode": "list",
+          "cachedResultName": "Orders",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg/edit#gid=411613722"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "order_id": "={{ $json.order_id }}",
+            "customer_id": "={{ $json.customer_id }}",
+            "product_id": "={{ $json.product_id }}",
+            "quantity": "={{ $json.quantity }}",
+            "total_amount": "={{ $json.total_amount }}",
+            "status": "={{ $json.status || 'Pending' }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "order_id",
+              "displayName": "order_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "customer_id",
+              "displayName": "customer_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "product_id",
+              "displayName": "product_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "quantity",
+              "displayName": "quantity",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "total_amount",
+              "displayName": "total_amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2896,
+        2464
+      ],
+      "id": "c95b23ad-9ab0-495a-8059-46b2f6b5cfc0",
+      "name": "Add Order",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$('Prepare Order Add').first().json; return [{json:{...d,reply:`✅ تمت إضافة الطلب${d.order_id?` ${d.order_id}`:''} بنجاح.`,result_type:'order_add',audit_action:'add',audit_status:'success'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3120,
+        2464
+      ],
+      "id": "fc8789b8-1dbe-40b6-83b2-3ec40fd787ad",
+      "name": "Format Add Result"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 411613722,
+          "mode": "list",
+          "cachedResultName": "Orders",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg/edit#gid=411613722"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2448,
+        2752
+      ],
+      "id": "48f6933f-6c72-4d75-8097-d54d66a284ac",
+      "name": "Get Orders For Update",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst input = $('Prepare Order Action').first()?.json || {};\nconst rows = $input.all().map(item => item.json || {});\n\nconst normalizeId = value =>\n  String(value ?? '').trim().toUpperCase();\n\nconst hasValue = value =>\n  value !== undefined &&\n  value !== null &&\n  String(value).trim() !== '';\n\nconst targetId = normalizeId(input.order_id || input.id);\n\nif (!targetId) {\n  return [{\n    json: {\n      ...input,\n      not_found: true,\n      missing_update_fields: false,\n      reply: '⚠️ أرسل رقم الطلب الذي تريد تعديله، مثل O003.',\n      result_type: 'order_update',\n      audit_action: 'update',\n      audit_status: 'failed'\n    }\n  }];\n}\n\nconst found = rows.find(row =>\n  normalizeId(row.order_id || row.id) === targetId\n);\n\nif (!found) {\n  return [{\n    json: {\n      ...input,\n      order_id: targetId,\n      not_found: true,\n      missing_update_fields: false,\n      reply: `⚠️ الطلب ${targetId} غير موجود، ولم يتم إجراء أي تعديل.`,\n      result_type: 'order_update',\n      audit_action: 'update',\n      audit_status: 'failed'\n    }\n  }];\n}\n\nconst fields = [\n  'customer_id',\n  'product_id',\n  'quantity',\n  'total_amount',\n  'status'\n];\n\nconst changed = fields.filter(key => hasValue(input[key]));\n\nif (!changed.length) {\n  return [{\n    json: {\n      ...input,\n      ...found,\n      order_id: found.order_id || targetId,\n      not_found: false,\n      missing_update_fields: true,\n      reply: '⚠️ الطلب موجود، لكن لم تحدد ما الذي تريد تعديله. مثال: غيّر حالة الطلب O003 إلى Approved.',\n      result_type: 'order_update',\n      audit_action: 'update',\n      audit_status: 'failed'\n    }\n  }];\n}\n\n// Preserve old values and replace only explicitly supplied fields.\nconst updateData = {\n  ...found,\n  ...input,\n  order_id: found.order_id || targetId,\n  not_found: false,\n  missing_update_fields: false\n};\n\nfor (const key of fields) {\n  updateData[key] = hasValue(input[key])\n    ? input[key]\n    : found[key];\n}\n\nreturn [{ json: updateData }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2672,
+        2752
+      ],
+      "id": "7d856a8b-3b73-4147-9742-a5d8789452b9",
+      "name": "Find Order To Update"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 411613722,
+          "mode": "list",
+          "cachedResultName": "Orders",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg/edit#gid=411613722"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "order_id": "={{ $json.order_id }}",
+            "customer_id": "={{ $json.customer_id }}",
+            "product_id": "={{ $json.product_id }}",
+            "quantity": "={{ $json.quantity }}",
+            "total_amount": "={{ $json.total_amount }}",
+            "status": "={{ $json.status }}"
+          },
+          "matchingColumns": [
+            "order_id"
+          ],
+          "schema": [
+            {
+              "id": "order_id",
+              "displayName": "order_id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "customer_id",
+              "displayName": "customer_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "product_id",
+              "displayName": "product_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "quantity",
+              "displayName": "quantity",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "total_amount",
+              "displayName": "total_amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3120,
+        2848
+      ],
+      "id": "f3f4db13-758a-40cd-b0a3-c2b743c40350",
+      "name": "Update Order",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$json; return [{json:{...d,reply:`✅ تم تحديث الطلب ${d.order_id||''} بنجاح.`,result_type:'order_update',audit_action:'update',audit_status:'success'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3344,
+        2848
+      ],
+      "id": "5bc6a6f5-44b5-4d61-9784-9bd8b6cff888",
+      "name": "Format Update Result"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$json; return [{json:{...d,reply:d.reply||'⚠️ لم يتم العثور على الطلب المطلوب.',result_type:'order_update',audit_action:'update',audit_status:'failed'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3344,
+        2656
+      ],
+      "id": "e775e1a1-5726-4555-af85-e7e56f8a3512",
+      "name": "Format Update Not Found"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 411613722,
+          "mode": "list",
+          "cachedResultName": "Orders",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg/edit#gid=411613722"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2672,
+        3136
+      ],
+      "id": "cd59127e-c2ae-407b-83fc-d14f8231ee6f",
+      "name": "Get Orders For Delete",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $('Prepare Order Action').first()?.json || {};\nconst rows = $input.all().map(item => item.json || {});\n\nconst targetId = String(\n  input.order_id ||\n  input.id ||\n  ''\n).trim().toUpperCase();\n\nconst found = rows.find(row => {\n  const rowId = String(\n    row.order_id ||\n    row.id ||\n    ''\n  ).trim().toUpperCase();\n\n  return targetId !== '' && rowId === targetId;\n});\n\nif (!found) {\n  return [\n    {\n      json: {\n        ...input,\n        order_id: targetId,\n        found: false,\n        not_found: true,\n        reply: `⚠️ الطلب ${targetId} غير موجود.`,\n        result_type: 'order_delete',\n        audit_action: 'delete',\n        audit_status: 'failed'\n      }\n    }\n  ];\n}\n\nreturn [\n  {\n    json: {\n      ...found,\n      ...input,\n      order_id: targetId,\n      found: true,\n      not_found: false,\n      row_number: found.row_number\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2896,
+        3136
+      ],
+      "id": "b5eeb2f7-a3be-4812-8e03-23095f779186",
+      "name": "Find Order To Delete"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$json; return [{json:{...d,reply:d.reply||'⚠️ لم يتم العثور على الطلب المطلوب.',result_type:'order_delete',audit_action:'delete',audit_status:'failed'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3344,
+        3040
+      ],
+      "id": "1df993b4-4fb5-4091-aba3-c6f1d45d09ac",
+      "name": "Format Delete Not Found"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$json; return [{json:{...d,reply:'⚠️ العملية المطلوبة غير مدعومة في إدارة الطلبات.',result_type:'order_unsupported',audit_action:d.action||'unknown',audit_status:'failed'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3344,
+        3424
+      ],
+      "id": "c07bbf43-9f90-4a8d-bad1-415a7470e81f",
+      "name": "Unsupported Order Action"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "3lWlOHWA5Eg21KAV",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/3lWlOHWA5Eg21KAV",
+          "cachedResultName": "WF-08 Audit Logging"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "user_id": "={{ $json.user_id || \"system\" }}",
+            "user_name": "={{ $json.user_name || \"\" }}",
+            "role": "={{ $json.role || \"\" }}",
+            "action": "={{ $json.audit_action || $json.action || \"operation\" }}",
+            "status": "={{ $json.audit_status || \"success\" }}",
+            "intent": "order",
+            "entity_type": "Order",
+            "entity_id": "={ $json.order_id || $json.entity_id || \"\" }",
+            "details": "={{ $json.reply || \"\" }}",
+            "reply": "={{ $json.reply || \"\" }}",
+            "result_type": "={{ $json.result_type || \"\" }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        3568,
+        2656
+      ],
+      "id": "24456cfe-e077-4d52-8ece-a6317a70001c",
+      "name": "Call WF-08 Audit Logging"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg",
+          "mode": "list",
+          "cachedResultName": "OpsMind AI Database"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 411613722,
+          "mode": "list",
+          "cachedResultName": "Orders",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1f679qttPf1j2EbkQ77t2_8nzTHOtD9GljcueG02tijg/edit#gid=411613722"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2448,
+        2464
+      ],
+      "id": "295ef67e-aa4f-4577-b7ca-9abeb48f6c8a",
+      "name": "Get Orders For Add",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const d=$('Prepare Order Add').first().json; const rows=$('Get Orders For Add').all().map(x=>x.json||{}); const last=rows.slice().reverse().find(r=>/^O\\d+$/i.test(String(r.order_id||'').trim())); const m=last?String(last.order_id).trim().toUpperCase().match(/^O(\\d+)$/):null; const id=`O${String((m?Number(m[1]):0)+1).padStart(3,'0')}`; return [{json:{...d,order_id:id,status:String(d.status||'Pending')}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2672,
+        2464
+      ],
+      "id": "5f68a276-66f8-4132-b552-28de501ff03b",
+      "name": "Prepare Order Add Final"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "DDJ5sZEMlXY14ein",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/DDJ5sZEMlXY14ein",
+          "cachedResultName": "WF-02 Approval Management"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chat_id": "={{ $json.chat_id }}",
+            "user_id": "={{ $json.user_id }}",
+            "user_name": "={{ $json.user_name }}",
+            "role": "={{ $json.role }}",
+            "action": "delete",
+            "entity_type": "Order",
+            "entity_id": "={{ $json.order_id }}",
+            "order_id": "={{ $json.order_id }}",
+            "request": "={{ $json.request }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        3344,
+        3232
+      ],
+      "id": "6f433a5e-fb48-49f5-9a15-4bb51187b420",
+      "name": "Call WF-02 Approval Management"
+    },
+    {
+      "parameters": {
+        "sendTo": "manager@example.com",
+        "subject": "OpsMind AI | تمت إضافة Order جديد",
+        "message": "={{ `<!DOCTYPE html><html><body style=\"margin:0;background:#f4f7fb;font-family:Arial,sans-serif;color:#1f2937\"><div style=\"max-width:640px;margin:30px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 6px 24px rgba(0,0,0,.08)\"><div style=\"background:#0f766e;color:#fff;padding:24px\"><h2 style=\"margin:0\">OpsMind AI</h2><p style=\"margin:8px 0 0\">تمت إضافة Order جديد بنجاح</p></div><div style=\"padding:24px\"><p>تم تنفيذ العملية بنجاح في نظام OpsMind AI.</p><table style=\"width:100%;border-collapse:collapse\"><tr><td style=\"padding:10px;border-bottom:1px solid #eee;font-weight:bold\">الرقم</td><td style=\"padding:10px;border-bottom:1px solid #eee\">${$json['order_id'] || '-'}</td></tr><tr><td style=\"padding:10px;border-bottom:1px solid #eee;font-weight:bold\">رقم الطلب</td><td style=\"padding:10px;border-bottom:1px solid #eee\">${$json.order_id || '-'}</td></tr><tr><td style=\"padding:10px;font-weight:bold\">التاريخ</td><td style=\"padding:10px\">${new Date().toLocaleString('ar-EG')}</td></tr></table><p style=\"margin-top:24px;color:#6b7280\">هذه رسالة آلية من OpsMind AI.</p></div></div></body></html>` }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        3344,
+        2464
+      ],
+      "id": "92ee6bfb-c3c3-4a53-8a29-4ed0898aa39a",
+      "name": "Send Add Order Email",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Gmail account 4"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "1f4b03cc-be16-40ec-8a8d-29f8d49e8434",
+              "leftValue": "={{ $json.found }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3120,
+        3136
+      ],
+      "id": "95d98e08-cc1c-46eb-abac-d996cc86c746",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "fe863db2-ce93-4cba-b1e0-1c4dc7c63913",
+              "leftValue": "={{ $json.not_found === true || $json.missing_update_fields === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2896,
+        2752
+      ],
+      "id": "d9438022-40f0-4cb2-b75e-d523102309e9",
+      "name": "Update Target Found?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f9ae89cd-1a77-4b4c-bad7-f5523779125c",
+              "leftValue": "={{ $json.missing_fields }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2224,
+        2368
+      ],
+      "id": "0394aacb-bd0d-4326-b27f-df2c70065d00",
+      "name": "Order Add Data Valid?"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst d = $json || {};\n\nreturn [{\n  json: {\n    ...d,\n    reply: d.reply || '⚠️ لا يمكن إضافة الطلب بسبب نقص البيانات المطلوبة.',\n    result_type: 'order_add',\n    audit_action: 'add',\n    audit_status: 'failed'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3344,
+        2272
+      ],
+      "id": "3ebc047b-6890-46bc-b641-3bc53aa02007",
+      "name": "Format Order Add Validation Error"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Prepare Order Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Order Action": {
+      "main": [
+        [
+          {
+            "node": "Switch Order Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch Order Action": {
+      "main": [
+        [
+          {
+            "node": "Get Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Order Add",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Orders For Update",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Orders For Delete",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unsupported Order Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Data": {
+      "main": [
+        [
+          {
+            "node": "Format View Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format View Result": {
+      "main": [
+        [
+          {
+            "node": "Call WF-08 Audit Logging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Order Add": {
+      "main": [
+        [
+          {
+            "node": "Order Add Data Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Order": {
+      "main": [
+        [
+          {
+            "node": "Format Add Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Add Result": {
+      "main": [
+        [
+          {
+            "node": "Send Add Order Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Orders For Update": {
+      "main": [
+        [
+          {
+            "node": "Find Order To Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Order To Update": {
+      "main": [
+        [
+          {
+            "node": "Update Target Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Order": {
+      "main": [
+        [
+          {
+            "node": "Format Update Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Update Result": {
+      "main": [
+        [
+          {
+            "node": "Call WF-08 Audit Logging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Update Not Found": {
+      "main": [
+        [
+          {
+            "node": "Call WF-08 Audit Logging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Orders For Delete": {
+      "main": [
+        [
+          {
+            "node": "Find Order To Delete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Order To Delete": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Delete Not Found": {
+      "main": [
+        [
+          {
+            "node": "Call WF-08 Audit Logging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unsupported Order Action": {
+      "main": [
+        [
+          {
+            "node": "Call WF-08 Audit Logging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Orders For Add": {
+      "main": [
+        [
+          {
+            "node": "Prepare Order Add Final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Order Add Final": {
+      "main": [
+        [
+          {
+            "node": "Add Order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Add Order Email": {
+      "main": [
+        [
+          {
+            "node": "Call WF-08 Audit Logging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Call WF-02 Approval Management",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Delete Not Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Target Found?": {
+      "main": [
+        [
+          {
+            "node": "Format Update Not Found",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Order Add Data Valid?": {
+      "main": [
+        [
+          {
+            "node": "Format Order Add Validation Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Orders For Add",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Order Add Validation Error": {
+      "main": [
+        [
+          {
+            "node": "Call WF-08 Audit Logging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "4gRXNAKnlMatvg6L",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "a076c22e-45fc-4b98-b4dd-16c3fdcbf0ac",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "nodeGroups": [],
+  "id": "aldryIxOkstIdwa6",
+  "tags": []
+}
